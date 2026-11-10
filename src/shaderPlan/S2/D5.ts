@@ -187,7 +187,7 @@ export class MeshBasicMaterial extends Material {
         uniform vec3 uColor;
         out vec4 fragColor;
         void main(){
-            fragColor=vec4(color,1.);
+            fragColor=vec4(uColor,1.);
         }
     
     `
@@ -292,6 +292,75 @@ export class MeshHalfLambertMaterial extends Material {
 
     constructor(params: MaterialParamsType) {
         super(params)
+    }
+
+}
+type PhongMaterialType = {
+    shininess?: number,
+    specular?: vec3,
+}
+export class MeshPhongMaterial extends Material {
+    vertexString = `#version 300 es
+        in vec3 aPosition;
+        in vec3 aNormal;
+        out vec3 vNormal;
+        out vec3 vWorldPos;
+        uniform mat4 modelMatrix;
+        uniform mat3 normalMatrix;
+        uniform mat4 viewMatrix;
+        uniform mat4 projectionMatrix;
+        void main(){
+            vec4 worldPos=modelMatrix*vec4(aPosition,1.);
+            vWorldPos=worldPos.xyz;
+            vNormal=normalize(normalMatrix*aNormal);
+            gl_Position=projectionMatrix*viewMatrix*worldPos;
+        }
+    `
+    fragmentString = `#version 300 es
+        precision highp float;
+        uniform vec3 uColor;
+        out vec4 fragColor;
+        uniform vec3 uLightColor;
+        uniform vec3 uLightDir;
+        in vec3 vNormal;
+        in vec3 vWorldPos;
+        uniform vec3 uAmbientColor;
+        uniform vec3 uSpecular;
+        uniform float ushininess;
+        uniform vec3 uCameraPos;
+
+        vec3 linearToSrgb(vec3 c) {
+            return mix(
+                c * 12.92,
+                1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055,
+                step(vec3(0.0031308), c)
+            );
+        }
+
+        void main(){
+            vec3 N=normalize(vNormal);
+            vec3 L=normalize(uLightDir);
+            float diffuse=max(dot(N,L),0.);
+            vec3 ambientColor=uColor*uAmbientColor;
+            vec3 diffuseColor=uColor*uLightColor*diffuse;
+
+            vec3 V=normalize(uCameraPos-vWorldPos);
+            vec3 H=normalize(L+V);
+            float specularFactor=pow(max(dot(N,H),0.),ushininess);
+            vec3 specularColor=uSpecular*uLightColor*specularFactor;
+
+            vec3 col=ambientColor+diffuseColor+specularColor;
+            col = col / (col + vec3(1.0));
+
+            fragColor=vec4(linearToSrgb(col),1.);
+        }
+    
+    `
+
+    constructor(params: MaterialParamsType & PhongMaterialType) {
+        super(params)
+        this.uniforms.uSpecular = colorToLinear(params.specular ?? [1, 1, 1])
+        this.uniforms.ushininess = params.shininess ?? 30
     }
 
 }
@@ -468,16 +537,13 @@ export class Renderer {
                     mesh.material.uniforms.uLightColor = colorToLinear(directionalLight.color ?? [1, 1, 1])
                 }
                 if (ambientLight) {
-                    mesh.material.uniforms.uAmbientColor = colorToLinear(ambientLight.color ?? [1, 1, 1])
                     mesh.material.uniforms.uAmbientColor = vec3.scale(
                         vec3.create(),
                         colorToLinear(ambientLight.color ?? [1, 1, 1]),
                         ambientLight.intensity ?? 1,
                     )
                 }
-                if (mesh.name === 'sphere3') {
-                    mesh.material.uniforms.uAmbientFactor = 0
-                }
+
                 this.renderMesh(mesh)
             }
         })
@@ -500,6 +566,7 @@ export class Renderer {
         mesh.material.uniforms.projectionMatrix = this.camera.projectionMatrix
         mesh.material.uniforms.modelMatrix = mesh.worldMatrix
         mesh.material.uniforms.normalMatrix = mesh.normalMatrix
+        mesh.material.uniforms.uCameraPos = this.camera.position
         mesh.material.uploadUniforms(this.gl)
         this.gl.drawElements(this.gl.TRIANGLES, indices.length, this.gl.UNSIGNED_SHORT, 0)
         this.gl.bindVertexArray(null)
