@@ -1,0 +1,69 @@
+<canvas id="canvas"></canvas>
+<script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+    }
+  }
+</script>
+<script type="module">
+  import * as THREE from "three";
+  const canvas = document.querySelector("#canvas");
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    stencil: true,
+    antialias: true,
+  });
+  renderer.setSize(600, 600);
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x111111);
+  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
+  camera.position.z = 2;
+
+  // 球体几何体
+  const geo = new THREE.SphereGeometry(0.5, 16, 32);
+
+  // 材质1：本体，写入模板，模板=1
+  const matBody = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    stencilWrite: true,
+    stencilRef: 1,
+    stencilFunc: THREE.AlwaysStencilFunc,
+    stencilFail: THREE.KeepStencilOp,
+    stencilZFail: THREE.KeepStencilOp,
+    stencilZPass: THREE.ReplaceStencilOp,
+    stencilWriteMask: 0xff,
+  });
+  const meshBody = new THREE.Mesh(geo, matBody);
+  scene.add(meshBody);
+
+  // 材质2：轮廓，沿法线膨胀，模板不等于1才绘制
+  const vertExpand = `
+varying vec3 vNormal;
+void main(){
+  vec3 pos = position + normal * 0.03;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(pos,1.0);
+}
+`;
+  const matOutline = new THREE.ShaderMaterial({
+    vertexShader: vertExpand,
+    fragmentShader: `void main(){gl_FragColor = vec4(0.0,1.0,1.0,1.0);}`,
+    side: THREE.BackSide, // 背面渲染，避免膨胀模型覆盖本体
+    stencilWrite: false,
+    stencilRef: 1,
+    stencilFunc: THREE.NotEqualStencilFunc,
+    stencilFail: THREE.KeepStencilOp,
+    stencilZFail: THREE.KeepStencilOp,
+    stencilZPass: THREE.KeepStencilOp,
+    stencilReadMask: 0xff,
+  });
+  const meshOutline = new THREE.Mesh(geo, matOutline);
+  scene.add(meshOutline);
+
+  function render() {
+    renderer.clear();
+    renderer.render(scene, camera);
+    requestAnimationFrame(render);
+  }
+  render();
+</script>
