@@ -1,5 +1,5 @@
 import { mat4, vec3 } from "gl-matrix"
-import { AmbientLight, DirectionalLight, Geometry, Material, Mesh, MeshBasicMaterial, MeshHalfLambertMaterial, MeshLambertMaterial, MeshPhongMaterial, MeshPhongMaterialMutiLight, Object3D, PerspectiveCamera, Renderer, SpotLight } from "./shaderPlan/S2/D5"
+import { AmbientLight, DirectionalLight, Geometry, Material, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshPhongMaterial, Object3D, PerspectiveCamera, Renderer, SpotLight } from "./shaderPlan/S2/D5"
 import { createSphere } from "./shaderPlan/S2/utils"
 function createShader(gl: WebGL2RenderingContext, source: string, type: WebGLRenderingContextBase['VERTEX_SHADER'] | WebGLRenderingContextBase['FRAGMENT_SHADER']) {
   const shader = gl.createShader(type)
@@ -33,16 +33,19 @@ const geo = new Geometry({
   positions: sphereBuffer.positions,
   normals: sphereBuffer.normals
 })
-const mat2 = new MeshPhongMaterialMutiLight({
-  color: [1, 1, 1],
-  specular: [1, 1, 1],
-  shininess: 2
+/* const mat2 = new MeshPhongMaterial({
+  color: [1, 0.5, 0],
+  specular: [0.5, 0.5, 0.5],
+  shininess: 32
+}) */
+const mat2 = new MeshLambertMaterial({
+  color: [1, 0.5, 0],
 })
 const sphere2 = new Mesh(geo, mat2)
 sphere2.position = [0, 0, 0]
 
 
-const directionalLight = new DirectionalLight([1, 1, 1], 0.5)
+const directionalLight = new DirectionalLight([1, 0, 0], 1)
 directionalLight.position = [1, 1, 1]
 const target = new Object3D()
 target.position = [0, 0, 0]

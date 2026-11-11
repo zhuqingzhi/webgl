@@ -62,7 +62,7 @@ export class Geometry {
 }
 
 type MaterialParamsType = {
-    color?: string | vec3
+    color?: vec3
 }
 export class Material {
     vertexShader!: WebGLShader
@@ -78,16 +78,19 @@ export class Material {
         uDirectLightColor: new Float32Array(MAX_LIGHTS * 3),
         uDirectLightDirection: new Float32Array(MAX_LIGHTS * 3),
         uDirectLightIntensity: new Float32Array(MAX_LIGHTS),
-        uDirLightCount: 0
+        uDirLightCount: 0,
     }
     uniformInfoMap: Map<string, {
         location: WebGLUniformLocation,
         type: number,
         size: number
     }> = new Map()
-    color?: string | vec3
+    color?: vec3
+    type: string = 'Material'
+    private warnedUniforms = new Set<string>()
     constructor(params: MaterialParamsType) {
-        this.uniforms.uColor = colorToLinear(params.color as number[])
+        this.color = params.color ?? [1, 1, 1]
+        this.syncUniforms()
     }
     initShader(gl: WebGL2RenderingContext) {
         if (this.program) return
@@ -124,7 +127,13 @@ export class Material {
     uploadUniforms(gl: WebGL2RenderingContext) {
         for (const [name, u] of this.uniformInfoMap) {
             const value = this.uniforms[name]
-            if (value === undefined) continue
+            if (value === undefined) {
+                if (!this.warnedUniforms.has(name)) {
+                    console.warn(`[uniform] shader 声明了 "${name}"，但 uniforms 里没有对应值`)
+                    this.warnedUniforms.add(name)
+                }
+                continue
+            }
             const location = u.location
             switch (u.type) {
                 case gl.FLOAT:
@@ -179,7 +188,9 @@ export class Material {
             }
         }
     }
-
+    syncUniforms() {
+        this.uniforms['uColor'] = this.uniforms["uMaterial.color"] = colorToLinear(this.color ?? [1, 1, 1])
+    }
 }
 // 职责：shader，program
 export class MeshBasicMaterial extends Material {
@@ -226,10 +237,18 @@ export class MeshLambertMaterial extends Material {
     `
     fragmentString = `#version 300 es
         precision highp float;
+        const int MAX_LIGHTS=8;
         uniform vec3 uColor;
         out vec4 fragColor;
-        uniform vec3 uLightColor;
-        uniform vec3 uLightDir;
+        uniform vec3 uLightColor[MAX_LIGHTS];
+        uniform vec3 uLightPosition[MAX_LIGHTS];
+        uniform float uLightIntensity[MAX_LIGHTS];
+        uniform int uLightCount;
+        uniform vec3 uDirectLightColor[MAX_LIGHTS];
+        uniform vec3 uDirectLightDirection[MAX_LIGHTS];
+        uniform float uDirectLightIntensity[MAX_LIGHTS];
+        uniform int uDirLightCount;
+
         in vec3 vNormal;
         in vec3 vWorldPos;
         uniform vec3 uAmbientColor;
@@ -243,12 +262,40 @@ export class MeshLambertMaterial extends Material {
         }
 
         void main(){
+            vec3 totalDiffuse=vec3(0.);
             vec3 N=normalize(vNormal);
-            vec3 L=normalize(uLightDir);
-            float diffuse=max(dot(N,L),0.);
+       
             vec3 ambientColor=uColor*uAmbientColor;
-            vec3 diffuseColor=uColor*uLightColor*diffuse;
-            vec3 col=ambientColor+diffuseColor;
+
+            vec3 col=ambientColor;
+            
+            
+
+            for(int i=0;i<MAX_LIGHTS;i++){
+                if(i>=uDirLightCount)break;
+                vec3 lightDir=normalize(uDirectLightDirection[i]);
+                vec3 dirColor=uDirectLightColor[i];
+                float dirIntensity=uDirectLightIntensity[i];
+                vec3 diffuse=dirColor*uColor*max(dot(N,lightDir),0.)*dirIntensity;
+                totalDiffuse+=diffuse;
+            }   
+            for(int i=0;i<MAX_LIGHTS;i++){
+                if(i>=uLightCount)break;
+                // 点光源
+                vec3 lightPos=uLightPosition[i];
+                vec3 lightColor=uLightColor[i];
+                float intensity=uLightIntensity[i];
+                
+                float dist=length(lightPos-vWorldPos);
+                float d2=max(dist*dist,1e-4);
+                float attenuation=1./d2;
+                vec3 L=normalize(lightPos-vWorldPos);
+                float diffuse=max(dot(N,L),0.);
+                totalDiffuse+=lightColor*uColor*diffuse*attenuation*intensity;
+                
+            }
+            col=col+totalDiffuse;
+            col = col / (col + vec3(1.0));
             fragColor=vec4(linearToSrgb(col),1.);
         }
     
@@ -260,55 +307,12 @@ export class MeshLambertMaterial extends Material {
 
 }
 
-export class MeshHalfLambertMaterial extends Material {
-    vertexString = `#version 300 es
-        in vec3 aPosition;
-        in vec3 aNormal;
-        out vec3 vNormal;
-        out vec3 vWorldPos;
-        uniform mat4 modelMatrix;
-        uniform mat3 normalMatrix;
-        uniform mat4 viewMatrix;
-        uniform mat4 projectionMatrix;
-        void main(){
-            vec4 worldPos=modelMatrix*vec4(aPosition,1.);
-            vWorldPos=worldPos.xyz;
-            vNormal=normalize(normalMatrix*aNormal);
-            gl_Position=projectionMatrix*viewMatrix*worldPos;
-        }
-    `
-    fragmentString = `#version 300 es
-        precision highp float;
-        uniform vec3 uColor;
-        out vec4 fragColor;
-        uniform vec3 uLightColor;
-        uniform vec3 uLightDir;
-        in vec3 vNormal;
-        in vec3 vWorldPos;
-        uniform vec3 uAmbientColor;
-        uniform float uAmbientFactor;
 
-        void main(){
-            vec3 N=normalize(vNormal);
-            vec3 L=normalize(uLightDir);
-            float diffuse=dot(N,L)*0.5+0.5;
-            vec3 ambientColor=uColor*uAmbientColor*uAmbientFactor;
-            vec3 diffuseColor=uColor*uLightColor*diffuse;
-            vec3 col=ambientColor+diffuseColor;
-            fragColor=vec4(col,1.);
-        }
-    
-    `
-
-    constructor(params: MaterialParamsType) {
-        super(params)
-    }
-
-}
 type PhongMaterialType = {
     shininess?: number,
     specular?: vec3,
 }
+
 export class MeshPhongMaterial extends Material {
     vertexString = `#version 300 es
         in vec3 aPosition;
@@ -328,89 +332,32 @@ export class MeshPhongMaterial extends Material {
     `
     fragmentString = `#version 300 es
         precision highp float;
-        uniform vec3 uColor;
-        out vec4 fragColor;
-        uniform vec3 uLightColor;
-        uniform vec3 uLightDir;
-        in vec3 vNormal;
-        in vec3 vWorldPos;
-        uniform vec3 uAmbientColor;
-        uniform vec3 uSpecular;
-        uniform float uShininess;
-        uniform vec3 uCameraPos;
-
-        vec3 linearToSrgb(vec3 c) {
-            return mix(
-                c * 12.92,
-                1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055,
-                step(vec3(0.0031308), c)
-            );
-        }
-
-        void main(){
-            vec3 N=normalize(vNormal);
-            vec3 L=normalize(uLightDir);
-            float diffuse=max(dot(N,L),0.);
-            vec3 ambientColor=uColor*uAmbientColor;
-            vec3 diffuseColor=uColor*uLightColor*diffuse;
-
-            vec3 V=normalize(uCameraPos-vWorldPos);
-            vec3 H=normalize(L+V);
-            float specularFactor=pow(max(dot(N,H),0.),uShininess);
-            vec3 specularColor=uSpecular*uLightColor*specularFactor;
-
-            vec3 col=ambientColor+diffuseColor+specularColor;
-            col = col / (col + vec3(1.0));
-
-            fragColor=vec4(linearToSrgb(col),1.);
-        }
-    
-    `
-
-    constructor(params: MaterialParamsType & PhongMaterialType) {
-        super(params)
-        this.uniforms.uSpecular = colorToLinear(params.specular ?? [1, 1, 1])
-        this.uniforms.uShininess = params.shininess ?? 30
-    }
-
-}
-export class MeshPhongMaterialMutiLight extends Material {
-    vertexString = `#version 300 es
-        in vec3 aPosition;
-        in vec3 aNormal;
-        out vec3 vNormal;
-        out vec3 vWorldPos;
-        uniform mat4 modelMatrix;
-        uniform mat3 normalMatrix;
-        uniform mat4 viewMatrix;
-        uniform mat4 projectionMatrix;
-        void main(){
-            vec4 worldPos=modelMatrix*vec4(aPosition,1.);
-            vWorldPos=worldPos.xyz;
-            vNormal=normalize(normalMatrix*aNormal);
-            gl_Position=projectionMatrix*viewMatrix*worldPos;
-        }
-    `
-    fragmentString = `#version 300 es
-        precision highp float;
         const int MAX_LIGHTS=8;
-        uniform vec3 uColor;
         out vec4 fragColor;
         uniform vec3 uLightColor[MAX_LIGHTS];
         uniform vec3 uLightPosition[MAX_LIGHTS];
         uniform float uLightIntensity[MAX_LIGHTS];
         uniform int uLightCount;
         uniform vec3 uDirectLightColor[MAX_LIGHTS];
-        uniform vec3 uDirectLightDirction[MAX_LIGHTS];
+        uniform vec3 uDirectLightDirection[MAX_LIGHTS];
         uniform float uDirectLightIntensity[MAX_LIGHTS];
         uniform int uDirLightCount;
 
         in vec3 vNormal;
         in vec3 vWorldPos;
         uniform vec3 uAmbientColor;
-        uniform vec3 uSpecular;
-        uniform float uShininess;
+
+        // uniform vec3 uColor;
+        // uniform vec3 uSpecular;
+        // uniform float uShininess;
         uniform vec3 uCameraPos;
+
+        struct Material{
+            vec3 color;
+            vec3 specular;
+            float shininess;
+        };
+        uniform Material uMaterial;
 
         vec3 linearToSrgb(vec3 c) {
             return mix(
@@ -421,27 +368,28 @@ export class MeshPhongMaterialMutiLight extends Material {
         }
 
         void main(){
-       
-            vec3 ambientColor=uColor*uAmbientColor;
-
-            vec3 col=ambientColor;
-            
             vec3 totalDiffuse=vec3(0.);
             vec3 totalSpecular=vec3(0.);
             vec3 N=normalize(vNormal);
             vec3 V=normalize(uCameraPos-vWorldPos);
+       
+            vec3 ambientColor=uMaterial.color*uAmbientColor;
+
+            vec3 col=ambientColor;
+            
+            
 
             for(int i=0;i<MAX_LIGHTS;i++){
                 if(i>=uDirLightCount)break;
-                vec3 lightDir=normalize(uDirectLightDirction[i]);
+                vec3 lightDir=normalize(uDirectLightDirection[i]);
                 vec3 dirColor=uDirectLightColor[i];
-                float uDirIntensity=uDirectLightIntensity[i];
-                vec3 diffuse=dirColor*uColor*max(dot(N,lightDir),0.)*uDirIntensity;
+                float dirIntensity=uDirectLightIntensity[i];
+                vec3 diffuse=dirColor*uMaterial.color*max(dot(N,lightDir),0.)*dirIntensity;
                 totalDiffuse+=diffuse;
 
                 vec3 H=normalize(lightDir+V);
-                float specular=pow(max(dot(N,H),0.),uShininess);
-                totalSpecular+=dirColor*uSpecular*specular*uDirIntensity;
+                float specular=pow(max(dot(N,H),0.),uMaterial.shininess);
+                totalSpecular+=dirColor*uMaterial.specular*specular*dirIntensity;
             }   
             
             for(int i=0;i<MAX_LIGHTS;i++){
@@ -452,14 +400,15 @@ export class MeshPhongMaterialMutiLight extends Material {
                 float intensity=uLightIntensity[i];
                 
                 float dist=length(lightPos-vWorldPos);
-                float attenuation=1./(0.1+dist*dist);
+                float d2=max(dist*dist,1e-4);
+                float attenuation=1./d2;
                 vec3 L=normalize(lightPos-vWorldPos);
                 float diffuse=max(dot(N,L),0.);
-                totalDiffuse+=lightColor*uColor*diffuse*attenuation*intensity;
+                totalDiffuse+=lightColor*uMaterial.color*diffuse*attenuation*intensity;
                 
                 vec3 H=normalize(L+V);
-                float specular=pow(max(dot(N,H),0.),uShininess);
-                totalSpecular+=lightColor*uSpecular*specular*attenuation*intensity;
+                float specular=pow(max(dot(N,H),0.),uMaterial.shininess);
+                totalSpecular+=lightColor*uMaterial.specular*specular*attenuation*intensity;
             }
             col=col+totalSpecular+totalDiffuse;
             col = col / (col + vec3(1.0));
@@ -467,13 +416,21 @@ export class MeshPhongMaterialMutiLight extends Material {
         }
     
     `
-
+    specular: vec3
+    shininess: number
+    type: string = 'MeshPhongMaterialMutiLight'
     constructor(params: MaterialParamsType & PhongMaterialType) {
         super(params)
-        this.uniforms.uSpecular = colorToLinear(params.specular ?? [1, 1, 1])
-        this.uniforms.uShininess = params.shininess ?? 30
+        this.specular = colorToLinear(params.specular ?? [1, 1, 1])
+        this.shininess = params.shininess ?? 30
     }
-
+    syncUniforms(): void {
+        super.syncUniforms()
+        this.uniforms['uSpecular'] = this.specular ?? [1, 1, 1]
+        this.uniforms['uShininess'] = this.shininess ?? 30
+        this.uniforms['uMaterial.specular'] = this.specular ?? [1, 1, 1]
+        this.uniforms['uMaterial.shininess'] = this.shininess ?? 30
+    }
 }
 
 
@@ -667,6 +624,7 @@ export class Renderer {
                 this.injectAmbientLightUniforms(mesh, ambientLight)
                 this.injectDirectLightUniforms(mesh, directionalLights)
                 this.injectSpotLightUniforms(mesh, spotLights)
+                this.injectMaterialUniforms(mesh)
 
                 this.renderMesh(mesh)
             }
@@ -758,6 +716,9 @@ export class Renderer {
         mesh.material.uniforms.modelMatrix = mesh.worldMatrix
         mesh.material.uniforms.normalMatrix = mesh.normalMatrix
         mesh.material.uniforms.uCameraPos = this.camera.position
+    }
+    private injectMaterialUniforms(mesh: Mesh) {
+        mesh.material.syncUniforms()
     }
     renderMesh(mesh: Mesh) {
 
