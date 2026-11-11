@@ -1,5 +1,5 @@
 import { mat4, vec3 } from "gl-matrix"
-import { AmbientLight, DirectionalLight, Geometry, Material, Mesh, MeshBasicMaterial, MeshHalfLambertMaterial, MeshLambertMaterial, MeshPhongMaterial, PerspectiveCamera, Renderer } from "./shaderPlan/S2/D5"
+import { AmbientLight, DirectionalLight, Geometry, Material, Mesh, MeshBasicMaterial, MeshHalfLambertMaterial, MeshLambertMaterial, MeshPhongMaterial, MeshPhongMaterialMutiLight, Object3D, PerspectiveCamera, Renderer, SpotLight } from "./shaderPlan/S2/D5"
 import { createSphere } from "./shaderPlan/S2/utils"
 function createShader(gl: WebGL2RenderingContext, source: string, type: WebGLRenderingContextBase['VERTEX_SHADER'] | WebGLRenderingContextBase['FRAGMENT_SHADER']) {
   const shader = gl.createShader(type)
@@ -33,52 +33,30 @@ const geo = new Geometry({
   positions: sphereBuffer.positions,
   normals: sphereBuffer.normals
 })
-const mat2 = new MeshPhongMaterial({
-  color: [1, 1, 0],
-  specular: [0.3, 0.3, 0.3],
+const mat2 = new MeshPhongMaterialMutiLight({
+  color: [1, 1, 1],
+  specular: [1, 1, 1],
   shininess: 2
 })
 const sphere2 = new Mesh(geo, mat2)
 sphere2.position = [0, 0, 0]
 
-const mat = new MeshPhongMaterial({
-  color: [1, 1, 0],
-  specular: [1, 1, 1],
-  shininess: 16
-})
-const sphere = new Mesh(geo, mat)
-sphere.position = [2, 0, 0]
 
-const mat3 = new MeshPhongMaterial({
-  color: [1, 1, 0],
-  specular: [1, 1, 1],
-  shininess: 32
-})
+const directionalLight = new DirectionalLight([1, 1, 1], 0.5)
+directionalLight.position = [1, 1, 1]
+const target = new Object3D()
+target.position = [0, 0, 0]
+directionalLight.target = target
 
-const sphere3 = new Mesh(geo, mat3)
-sphere3.position = [4, 0, 0]
-
-const ma4 = new MeshPhongMaterial({
-  color: [1, 1, 0],
-  specular: [1, 1, 1],
-  shininess: 64
-})
-const sphere4 = new Mesh(geo, ma4)
-sphere4.position = [6, 0, 0]
-
-const mat5 = new MeshPhongMaterial({
-  color: [1, 1, 0],
-  specular: [1, 1, 1],
-  shininess: 256
-})
-const sphere5 = new Mesh(geo, mat5)
-sphere5.position = [8, 0, 0]
-
-const directionalLight = new DirectionalLight([1, 1, 1])
-directionalLight.position = [0, 0, 1]
 const ambientLight = new AmbientLight([1, 1, 1,], 0.1)
+const spotLight = new SpotLight([1, 0, 0], 10)
+spotLight.position = [5, 0, 0]
+const spotLight2 = new SpotLight([0, 1, 0], 10)
+spotLight2.position = [0, 5, 0]
+const spotLight3 = new SpotLight([0, 0, 1], 10)
+spotLight3.position = [0, 0, 5]
 function render() {
-  renderer.render([sphere2, sphere, sphere3, sphere4, sphere5, directionalLight, ambientLight], camera)
+  renderer.render([sphere2, directionalLight, ambientLight, spotLight, spotLight2, spotLight3], camera)
   requestAnimationFrame(render)
 }
 render()

@@ -4,7 +4,7 @@
 
 import { mat3, mat4, vec3, vec4 } from "gl-matrix"
 import { colorToLinear, createShader, isMesh } from "./utils"
-
+const MAX_LIGHTS = 8
 // 职责：顶点数据，主要管什么形状
 export class Geometry {
     normals: Float32Array
@@ -70,7 +70,16 @@ export class Material {
     program!: WebGLProgram
     vertexString!: string
     fragmentString!: string
-    uniforms: Record<string, any> = {}
+    uniforms: Record<string, any> = {
+        uLightPosition: new Float32Array(MAX_LIGHTS * 3),
+        uLightColor: new Float32Array(MAX_LIGHTS * 3),
+        uLightIntensity: new Float32Array(MAX_LIGHTS),
+        uLightCount: 0,
+        uDirectLightColor: new Float32Array(MAX_LIGHTS * 3),
+        uDirectLightDirection: new Float32Array(MAX_LIGHTS * 3),
+        uDirectLightIntensity: new Float32Array(MAX_LIGHTS),
+        uDirLightCount: 0
+    }
     uniformInfoMap: Map<string, {
         location: WebGLUniformLocation,
         type: number,
@@ -101,14 +110,15 @@ export class Material {
         const count = gl.getProgramParameter(this.program, gl.ACTIVE_UNIFORMS)
         for (let i = 0; i < count; i++) {
             const u = gl.getActiveUniform(this.program, i)
+            console.log('mm', u)
             if (!u) continue
             const location = gl.getUniformLocation(this.program, u.name)!
-            this.uniformInfoMap.set(u.name, {
+            const name = u.name.replace(/\[0\]$/, '')
+            this.uniformInfoMap.set(name, {
                 location,
                 type: u.type,
                 size: u.size
             })
-
         }
     }
     uploadUniforms(gl: WebGL2RenderingContext) {
@@ -326,7 +336,7 @@ export class MeshPhongMaterial extends Material {
         in vec3 vWorldPos;
         uniform vec3 uAmbientColor;
         uniform vec3 uSpecular;
-        uniform float ushininess;
+        uniform float uShininess;
         uniform vec3 uCameraPos;
 
         vec3 linearToSrgb(vec3 c) {
@@ -346,7 +356,7 @@ export class MeshPhongMaterial extends Material {
 
             vec3 V=normalize(uCameraPos-vWorldPos);
             vec3 H=normalize(L+V);
-            float specularFactor=pow(max(dot(N,H),0.),ushininess);
+            float specularFactor=pow(max(dot(N,H),0.),uShininess);
             vec3 specularColor=uSpecular*uLightColor*specularFactor;
 
             vec3 col=ambientColor+diffuseColor+specularColor;
@@ -360,7 +370,108 @@ export class MeshPhongMaterial extends Material {
     constructor(params: MaterialParamsType & PhongMaterialType) {
         super(params)
         this.uniforms.uSpecular = colorToLinear(params.specular ?? [1, 1, 1])
-        this.uniforms.ushininess = params.shininess ?? 30
+        this.uniforms.uShininess = params.shininess ?? 30
+    }
+
+}
+export class MeshPhongMaterialMutiLight extends Material {
+    vertexString = `#version 300 es
+        in vec3 aPosition;
+        in vec3 aNormal;
+        out vec3 vNormal;
+        out vec3 vWorldPos;
+        uniform mat4 modelMatrix;
+        uniform mat3 normalMatrix;
+        uniform mat4 viewMatrix;
+        uniform mat4 projectionMatrix;
+        void main(){
+            vec4 worldPos=modelMatrix*vec4(aPosition,1.);
+            vWorldPos=worldPos.xyz;
+            vNormal=normalize(normalMatrix*aNormal);
+            gl_Position=projectionMatrix*viewMatrix*worldPos;
+        }
+    `
+    fragmentString = `#version 300 es
+        precision highp float;
+        const int MAX_LIGHTS=8;
+        uniform vec3 uColor;
+        out vec4 fragColor;
+        uniform vec3 uLightColor[MAX_LIGHTS];
+        uniform vec3 uLightPosition[MAX_LIGHTS];
+        uniform float uLightIntensity[MAX_LIGHTS];
+        uniform int uLightCount;
+        uniform vec3 uDirectLightColor[MAX_LIGHTS];
+        uniform vec3 uDirectLightDirction[MAX_LIGHTS];
+        uniform float uDirectLightIntensity[MAX_LIGHTS];
+        uniform int uDirLightCount;
+
+        in vec3 vNormal;
+        in vec3 vWorldPos;
+        uniform vec3 uAmbientColor;
+        uniform vec3 uSpecular;
+        uniform float uShininess;
+        uniform vec3 uCameraPos;
+
+        vec3 linearToSrgb(vec3 c) {
+            return mix(
+                c * 12.92,
+                1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055,
+                step(vec3(0.0031308), c)
+            );
+        }
+
+        void main(){
+       
+            vec3 ambientColor=uColor*uAmbientColor;
+
+            vec3 col=ambientColor;
+            
+            vec3 totalDiffuse=vec3(0.);
+            vec3 totalSpecular=vec3(0.);
+            vec3 N=normalize(vNormal);
+            vec3 V=normalize(uCameraPos-vWorldPos);
+
+            for(int i=0;i<MAX_LIGHTS;i++){
+                if(i>=uDirLightCount)break;
+                vec3 lightDir=normalize(uDirectLightDirction[i]);
+                vec3 dirColor=uDirectLightColor[i];
+                float uDirIntensity=uDirectLightIntensity[i];
+                vec3 diffuse=dirColor*uColor*max(dot(N,lightDir),0.)*uDirIntensity;
+                totalDiffuse+=diffuse;
+
+                vec3 H=normalize(lightDir+V);
+                float specular=pow(max(dot(N,H),0.),uShininess);
+                totalSpecular+=dirColor*uSpecular*specular*uDirIntensity;
+            }   
+            
+            for(int i=0;i<MAX_LIGHTS;i++){
+                if(i>=uLightCount)break;
+                // 点光源
+                vec3 lightPos=uLightPosition[i];
+                vec3 lightColor=uLightColor[i];
+                float intensity=uLightIntensity[i];
+                
+                float dist=length(lightPos-vWorldPos);
+                float attenuation=1./(0.1+dist*dist);
+                vec3 L=normalize(lightPos-vWorldPos);
+                float diffuse=max(dot(N,L),0.);
+                totalDiffuse+=lightColor*uColor*diffuse*attenuation*intensity;
+                
+                vec3 H=normalize(L+V);
+                float specular=pow(max(dot(N,H),0.),uShininess);
+                totalSpecular+=lightColor*uSpecular*specular*attenuation*intensity;
+            }
+            col=col+totalSpecular+totalDiffuse;
+            col = col / (col + vec3(1.0));
+            fragColor=vec4(linearToSrgb(col),1.);
+        }
+    
+    `
+
+    constructor(params: MaterialParamsType & PhongMaterialType) {
+        super(params)
+        this.uniforms.uSpecular = colorToLinear(params.specular ?? [1, 1, 1])
+        this.uniforms.uShininess = params.shininess ?? 30
     }
 
 }
@@ -407,27 +518,33 @@ export class Mesh extends Object3D {
 export class Light extends Object3D {
     color?: vec4
     intensity?: number
-    constructor() {
+    constructor(color?: vec4, intensity?: number) {
         super()
         this.type = "Light"
+        this.color = color
+        this.intensity = intensity
+    }
+}
+
+export class SpotLight extends Light {
+    target!: Object3D
+    constructor(color?: vec4, intensity?: number) {
+        super(color, intensity)
+        this.type = "SpotLight"
     }
 }
 
 export class DirectionalLight extends Light {
     target!: Object3D
     constructor(color?: vec4, intensity?: number) {
-        super()
-        this.color = color
-        this.intensity = intensity
+        super(color, intensity)
         this.type = "DirectionalLight"
     }
 }
 
 export class AmbientLight extends Light {
     constructor(color?: vec4, intensity?: number) {
-        super()
-        this.color = color
-        this.intensity = intensity
+        super(color, intensity)
         this.type = "AmbientLight"
     }
 }
@@ -526,49 +643,133 @@ export class Renderer {
         this.gl.cullFace(this.gl.BACK)
         this.camera.updateMatrix()
         this.camera.updateProjectionMatrix()
-
-        const directionalLight = this.scene.find(o => o.type === 'DirectionalLight') as DirectionalLight
+        const spotLights = this.scene.filter(o => o.type === 'SpotLight') as SpotLight[]
         const ambientLight = this.scene.find(o => o.type === 'AmbientLight') as AmbientLight
+        const directionalLights = this.scene.filter(o => o.type === 'DirectionalLight') as DirectionalLight[]
+
+        spotLights.forEach(l => l.updateMatrix())
+        directionalLights.forEach(l => {
+            l.updateMatrix()
+            l.target?.updateMatrix()
+        })
         this.scene.forEach(mesh => {
             if (isMesh(mesh)) {
-                if (directionalLight) {
-                    mesh.material.uniforms.uLightDir =
-                        vec3.subtract(vec3.create(), directionalLight.position, directionalLight.target?.position || [0, 0, 0])
-                    mesh.material.uniforms.uLightColor = colorToLinear(directionalLight.color ?? [1, 1, 1])
+                // 资源
+                mesh.material.initShader(this.gl)
+
+                if (!mesh.geometry.vao) {
+                    mesh.geometry.vao = mesh.geometry.init(this.gl, mesh.material.program)
                 }
-                if (ambientLight) {
-                    mesh.material.uniforms.uAmbientColor = vec3.scale(
-                        vec3.create(),
-                        colorToLinear(ambientLight.color ?? [1, 1, 1]),
-                        ambientLight.intensity ?? 1,
-                    )
-                }
+                // 计算
+                mesh.updateMatrix()
+                // 注入
+                this.injectFrameUniforms(mesh)
+                this.injectAmbientLightUniforms(mesh, ambientLight)
+                this.injectDirectLightUniforms(mesh, directionalLights)
+                this.injectSpotLightUniforms(mesh, spotLights)
 
                 this.renderMesh(mesh)
             }
         })
         // requestAnimationFrame(() => this._render())
     }
-    renderMesh(mesh: Mesh) {
 
-        mesh.material.initShader(this.gl)
+    private injectSpotLightUniforms(mesh: Mesh, spotLights: SpotLight[]) {
+        const pos = mesh.material.uniforms.uLightPosition as Float32Array
+        const col = mesh.material.uniforms.uLightColor as Float32Array
+        const intens = mesh.material.uniforms.uLightIntensity as Float32Array
 
-        let { vao, indices } = mesh.geometry
-        if (!vao) {
-            vao = mesh.geometry.init(this.gl, mesh.material.program)
-            mesh.geometry.vao = vao
+        const count = Math.min(spotLights.length, MAX_LIGHTS)
+
+        // 先清零（可选：只清尾部）
+        pos.fill(0)
+        col.fill(0)
+        intens.fill(0)
+
+        for (let i = 0; i < count; i++) {
+            const l = spotLights[i]
+            const base = i * 3
+
+            pos[base] = l.worldMatrix[12]
+            pos[base + 1] = l.worldMatrix[13]
+            pos[base + 2] = l.worldMatrix[14]
+
+            const c = colorToLinear(l.color ?? [1, 1, 1])
+            col[base] = c[0]
+            col[base + 1] = c[1]
+            col[base + 2] = c[2]
+
+            intens[i] = l.intensity ?? 1
         }
-        this.gl.useProgram(mesh.material.program)
-        this.gl.bindVertexArray(vao)
-        mesh.updateMatrix()
+
+        mesh.material.uniforms.uLightCount = count
+    }
+    private injectAmbientLightUniforms(mesh: Mesh, ambientLight: AmbientLight) {
+        if (ambientLight) {
+            mesh.material.uniforms.uAmbientColor = vec3.scale(
+                vec3.create(),
+                colorToLinear(ambientLight.color ?? [1, 1, 1]),
+                ambientLight.intensity ?? 1,
+            )
+        }
+    }
+    private injectDirectLightUniforms(mesh: Mesh, directionalLights: DirectionalLight[]) {
+        const dir = mesh.material.uniforms.uDirectLightDirection as Float32Array
+        const col = mesh.material.uniforms.uDirectLightColor as Float32Array
+        const intens = mesh.material.uniforms.uDirectLightIntensity as Float32Array
+
+        const count = Math.min(directionalLights.length, MAX_LIGHTS)
+
+        // 先清零（可选：只清尾部）
+        dir.fill(0)
+        col.fill(0)
+        intens.fill(0)
+
+        for (let i = 0; i < count; i++) {
+            const l = directionalLights[i]
+            const base = i * 3
+
+            const target = l.target
+            const lightWorldPos = vec3.fromValues(l.worldMatrix[12], l.worldMatrix[13], l.worldMatrix[14])
+            const targetWorldPos = vec3.fromValues(target.worldMatrix[12], target.worldMatrix[13], target.worldMatrix[14])
+            const lightDir = vec3.create()
+            vec3.subtract(lightDir, lightWorldPos, targetWorldPos)
+            vec3.normalize(lightDir, lightDir)
+
+            dir[base] = lightDir[0]
+            dir[base + 1] = lightDir[1]
+            dir[base + 2] = lightDir[2]
+
+            const c = colorToLinear(l.color ?? [1, 1, 1])
+            col[base] = c[0]
+            col[base + 1] = c[1]
+            col[base + 2] = c[2]
+
+            intens[i] = l.intensity ?? 1
+        }
+
+        mesh.material.uniforms.uDirLightCount = count
+    }
+
+    private injectFrameUniforms(mesh: Mesh) {
         // 注入视图矩阵，投影矩阵
         mesh.material.uniforms.viewMatrix = this.camera.matrixWorldInverse
         mesh.material.uniforms.projectionMatrix = this.camera.projectionMatrix
         mesh.material.uniforms.modelMatrix = mesh.worldMatrix
         mesh.material.uniforms.normalMatrix = mesh.normalMatrix
         mesh.material.uniforms.uCameraPos = this.camera.position
+    }
+    renderMesh(mesh: Mesh) {
+
+        //绑定
+        this.gl.useProgram(mesh.material.program)
+        this.gl.bindVertexArray(mesh.geometry.vao)
+
+        // 上传
         mesh.material.uploadUniforms(this.gl)
-        this.gl.drawElements(this.gl.TRIANGLES, indices.length, this.gl.UNSIGNED_SHORT, 0)
+
+        // 绘制
+        this.gl.drawElements(this.gl.TRIANGLES, mesh.geometry.indices.length, this.gl.UNSIGNED_SHORT, 0)
         this.gl.bindVertexArray(null)
     }
 }
