@@ -340,7 +340,7 @@ export class MeshPhongMaterial extends Material {
             vWorldPos=worldPos.xyz;
             vNormal=normalize(normalMatrix*aNormal);
             gl_Position=projectionMatrix*viewMatrix*worldPos;
-            uUv=aUv*2.;
+            uUv=aUv;
         }
     `
     fragmentString = `#version 300 es
@@ -459,7 +459,8 @@ type TextureParamsType = {
     wrapS?: number,
     wrapT?: number,
     minFilter?: number,
-    magFilter?: number
+    magFilter?: number,
+    colorSpace?: "srgb" | 'linear'
 }
 const defaultTextureParameter = {
     wrapS: WebGLRenderingContext["CLAMP_TO_EDGE"],
@@ -476,16 +477,18 @@ export class Texture {
     ready: boolean = false
     private texture: WebGLTexture | null = null
     needUpdate: boolean = true
-    private _mipMap: boolean = true
+    colorSpace?: TextureParamsType['colorSpace'] = "srgb"
     constructor(params: TextureParamsType) {
         const { wrapS = defaultTextureParameter.wrapS, wrapT = defaultTextureParameter.wrapT,
-            minFilter = defaultTextureParameter.minFilter, magFilter = defaultTextureParameter.magFilter
+            minFilter = defaultTextureParameter.minFilter, magFilter = defaultTextureParameter.magFilter,
+            colorSpace = 'srgb'
         } = params
         this.image = params.image
         this.wrapS = wrapS
         this.wrapT = wrapT
         this.minFilter = minFilter
         this.magFilter = magFilter
+        this.colorSpace = colorSpace
     }
     init(gl: WebGL2RenderingContext) {
         let texture = this.texture
@@ -493,12 +496,13 @@ export class Texture {
         gl.bindTexture(gl.TEXTURE_2D, texture)
 
         if (!this.needUpdate) return
+        const internalFormat = this.colorSpace === 'srgb' ? gl.SRGB8_ALPHA8 : gl.RGBA8
         if (!this.ready) {
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+            gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
                 new Uint8Array([255, 0, 255, 255]))
         } else {
             gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.image)
+            gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, gl.RGBA, gl.UNSIGNED_BYTE, this.image)
 
             if ([gl.LINEAR_MIPMAP_LINEAR, gl.LINEAR_MIPMAP_NEAREST, gl.NEAREST_MIPMAP_LINEAR, gl.NEAREST_MIPMAP_NEAREST].includes(this.minFilter)) {
                 gl.generateMipmap(gl.TEXTURE_2D)

@@ -36,7 +36,9 @@ const geo = new Geometry({
 })
 const textureLoader = new TextureLoader()
 const texture = textureLoader.load("./color.jpg")
-
+texture.wrapS = renderer.gl.CLAMP_TO_EDGE
+texture.wrapT = renderer.gl.CLAMP_TO_EDGE
+// texture.colorSpace = 'linear'
 const image = createCheckerCanvas(512, 8)
 /* const checker = new Texture({
   image,
@@ -81,7 +83,7 @@ const planeMat = new MeshPhongMaterial({
   color: [1, 1, 1],
   specular: [0.5, 0.5, 0.5],
   shininess: 32,
-  map: planeMap,
+  map: texture,
 })
 const plane = new Mesh(planeGeo, planeMat)
 plane.position = [-20, 0, -30]
