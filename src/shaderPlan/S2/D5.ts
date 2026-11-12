@@ -11,20 +11,29 @@ export class Geometry {
     indices: Uint16Array
     positions: Float32Array
     vao!: WebGLVertexArrayObject
+    uv: Float32Array
     constructor(params: {
         normals: Float32Array,
         indices: Uint16Array,
-        positions: Float32Array
+        positions: Float32Array,
+        uv: Float32Array
     }) {
         this.normals = params.normals
         this.indices = params.indices
         this.positions = params.positions
+        this.uv = params.uv
     }
     init(gl: WebGL2RenderingContext, program: WebGLProgram) {
         const vao = gl.createVertexArray()
         gl.bindVertexArray(vao)
         const aPositionLoc = gl.getAttribLocation(program, "aPosition")
         const aNormalLoc = gl.getAttribLocation(program, "aNormal")
+        const aUvLoc = gl.getAttribLocation(program, "aUv")
+        this.recordAttrib(gl, aUvLoc, {
+            name: "aUvLoc",
+            data: this.uv,
+            size: 2
+        })
         this.recordAttrib(gl, aPositionLoc, {
             name: "aPosition",
             data: this.positions,
@@ -127,7 +136,7 @@ export class Material {
     uploadUniforms(gl: WebGL2RenderingContext) {
         for (const [name, u] of this.uniformInfoMap) {
             const value = this.uniforms[name]
-            if (value === undefined) {
+            if (value === undefined || value < 0) {
                 if (!this.warnedUniforms.has(name)) {
                     console.warn(`[uniform] shader 声明了 "${name}"，但 uniforms 里没有对应值`)
                     this.warnedUniforms.add(name)
@@ -311,12 +320,15 @@ export class MeshLambertMaterial extends Material {
 type PhongMaterialType = {
     shininess?: number,
     specular?: vec3,
+    map?: Texture
 }
 
 export class MeshPhongMaterial extends Material {
     vertexString = `#version 300 es
         in vec3 aPosition;
         in vec3 aNormal;
+        in vec2 aUv;
+        out vec2 uUv;
         out vec3 vNormal;
         out vec3 vWorldPos;
         uniform mat4 modelMatrix;
@@ -328,6 +340,7 @@ export class MeshPhongMaterial extends Material {
             vWorldPos=worldPos.xyz;
             vNormal=normalize(normalMatrix*aNormal);
             gl_Position=projectionMatrix*viewMatrix*worldPos;
+            uUv=aUv*2.;
         }
     `
     fragmentString = `#version 300 es
@@ -342,6 +355,9 @@ export class MeshPhongMaterial extends Material {
         uniform vec3 uDirectLightDirection[MAX_LIGHTS];
         uniform float uDirectLightIntensity[MAX_LIGHTS];
         uniform int uDirLightCount;
+        in vec2 uUv;
+
+        uniform sampler2D uTexture;
 
         in vec3 vNormal;
         in vec3 vWorldPos;
@@ -372,11 +388,13 @@ export class MeshPhongMaterial extends Material {
             vec3 totalSpecular=vec3(0.);
             vec3 N=normalize(vNormal);
             vec3 V=normalize(uCameraPos-vWorldPos);
+            vec4 tex=texture(uTexture,uUv);
        
-            vec3 ambientColor=uMaterial.color*uAmbientColor;
-
-            vec3 col=ambientColor;
             
+            
+            vec3 albedo=uMaterial.color*tex.rgb;
+            vec3 ambientColor=albedo*uAmbientColor;
+            vec3 col=ambientColor;
             
 
             for(int i=0;i<MAX_LIGHTS;i++){
@@ -384,7 +402,7 @@ export class MeshPhongMaterial extends Material {
                 vec3 lightDir=normalize(uDirectLightDirection[i]);
                 vec3 dirColor=uDirectLightColor[i];
                 float dirIntensity=uDirectLightIntensity[i];
-                vec3 diffuse=dirColor*uMaterial.color*max(dot(N,lightDir),0.)*dirIntensity;
+                vec3 diffuse=dirColor*albedo*max(dot(N,lightDir),0.)*dirIntensity;
                 totalDiffuse+=diffuse;
 
                 vec3 H=normalize(lightDir+V);
@@ -404,7 +422,7 @@ export class MeshPhongMaterial extends Material {
                 float attenuation=1./d2;
                 vec3 L=normalize(lightPos-vWorldPos);
                 float diffuse=max(dot(N,L),0.);
-                totalDiffuse+=lightColor*uMaterial.color*diffuse*attenuation*intensity;
+                totalDiffuse+=lightColor*albedo*diffuse*attenuation*intensity;
                 
                 vec3 H=normalize(L+V);
                 float specular=pow(max(dot(N,H),0.),uMaterial.shininess);
@@ -413,16 +431,19 @@ export class MeshPhongMaterial extends Material {
             col=col+totalSpecular+totalDiffuse;
             col = col / (col + vec3(1.0));
             fragColor=vec4(linearToSrgb(col),1.);
+            // fragColor=tex;
         }
     
     `
     specular: vec3
     shininess: number
-    type: string = 'MeshPhongMaterialMutiLight'
+    type: string = 'MeshPhongMaterial'
+    map?: Texture
     constructor(params: MaterialParamsType & PhongMaterialType) {
         super(params)
         this.specular = colorToLinear(params.specular ?? [1, 1, 1])
         this.shininess = params.shininess ?? 30
+        this.map = params.map
     }
     syncUniforms(): void {
         super.syncUniforms()
@@ -433,6 +454,96 @@ export class MeshPhongMaterial extends Material {
     }
 }
 
+type TextureParamsType = {
+    image: TexImageSource,
+    wrapS?: number,
+    wrapT?: number,
+    minFilter?: number,
+    magFilter?: number
+}
+const defaultTextureParameter = {
+    wrapS: WebGLRenderingContext["CLAMP_TO_EDGE"],
+    wrapT: WebGLRenderingContext["CLAMP_TO_EDGE"],
+    minFilter: WebGLRenderingContext["LINEAR"],
+    magFilter: WebGLRenderingContext["LINEAR"]
+}
+export class Texture {
+    image: TexImageSource
+    wrapS: number
+    wrapT: number
+    minFilter: number
+    magFilter: number
+    ready: boolean = false
+    private texture: WebGLTexture | null = null
+    needUpdate: boolean = true
+    private _mipMap: boolean = true
+    constructor(params: TextureParamsType) {
+        const { wrapS = defaultTextureParameter.wrapS, wrapT = defaultTextureParameter.wrapT,
+            minFilter = defaultTextureParameter.minFilter, magFilter = defaultTextureParameter.magFilter
+        } = params
+        this.image = params.image
+        this.wrapS = wrapS
+        this.wrapT = wrapT
+        this.minFilter = minFilter
+        this.magFilter = magFilter
+    }
+    init(gl: WebGL2RenderingContext) {
+        let texture = this.texture
+        if (!texture) texture = this.texture = gl.createTexture()
+        gl.bindTexture(gl.TEXTURE_2D, texture)
+
+        if (!this.needUpdate) return
+        if (!this.ready) {
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+                new Uint8Array([255, 0, 255, 255]))
+        } else {
+            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.image)
+
+            if ([gl.LINEAR_MIPMAP_LINEAR, gl.LINEAR_MIPMAP_NEAREST, gl.NEAREST_MIPMAP_LINEAR, gl.NEAREST_MIPMAP_NEAREST].includes(this.minFilter)) {
+                gl.generateMipmap(gl.TEXTURE_2D)
+            }
+
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, this.wrapS)
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, this.wrapT)
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, this.magFilter)
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, this.minFilter)
+            const ext = gl.getExtension('EXT_texture_filter_anisotropic')
+            if (ext) {
+                const max = gl.getParameter(ext.MAX_TEXTURE_MAX_ANISOTROPY_EXT)
+                gl.texParameterf(gl.TEXTURE_2D, ext.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(4, max))
+            }
+        }
+        this.needUpdate = false
+    }
+    bind(gl: WebGL2RenderingContext, unit: number) {
+        gl.activeTexture(gl.TEXTURE0 + unit)
+        gl.bindTexture(gl.TEXTURE_2D, this.texture)
+    }
+
+}
+
+export abstract class Loader {
+    abstract load(url: string): any;
+}
+export class TextureLoader extends Loader {
+    load(url: string): Texture {
+        const img = new Image()
+        const texture = new Texture({
+            image: img
+        })
+        img.onload = e => {
+            texture.ready = true
+            texture.needUpdate = true
+        }
+        img.onerror = e => {
+            texture.ready = false
+            console.log('纹理加载失败')
+        }
+        img.src = url
+        return texture
+    }
+}
 
 export class Object3D {
     type: string = 'Object3D'
@@ -575,7 +686,7 @@ type RendererParamType = {
 // 渲染循环，切换program，遍历material的uniforms上传数据，脏标记
 export class Renderer {
     shaderMap: Set<WebGLShader> = new Set()
-    private gl: WebGL2RenderingContext
+    gl: WebGL2RenderingContext
     camera!: Camera
     scene!: Object3D[]
     constructor(params: RendererParamType) {
@@ -593,7 +704,7 @@ export class Renderer {
         this.scene = list
         this._render()
     }
-    private _render() {
+    private async _render() {
         this.gl.clearColor(0, 0, 0, 1)
         this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT)
         this.gl.enable(this.gl.CULL_FACE)
@@ -609,7 +720,9 @@ export class Renderer {
             l.updateMatrix()
             l.target?.updateMatrix()
         })
-        this.scene.forEach(mesh => {
+
+        for (let i = 0; i < this.scene.length; i++) {
+            const mesh = this.scene[i];
             if (isMesh(mesh)) {
                 // 资源
                 mesh.material.initShader(this.gl)
@@ -625,12 +738,12 @@ export class Renderer {
                 this.injectDirectLightUniforms(mesh, directionalLights)
                 this.injectSpotLightUniforms(mesh, spotLights)
                 this.injectMaterialUniforms(mesh)
-
                 this.renderMesh(mesh)
             }
-        })
+        }
         // requestAnimationFrame(() => this._render())
     }
+
 
     private injectSpotLightUniforms(mesh: Mesh, spotLights: SpotLight[]) {
         const pos = mesh.material.uniforms.uLightPosition as Float32Array
@@ -719,6 +832,14 @@ export class Renderer {
     }
     private injectMaterialUniforms(mesh: Mesh) {
         mesh.material.syncUniforms()
+        const map = (mesh.material as any).map
+        let unit = 0
+        map.init(this.gl)
+        if (map?.ready) {
+            map.bind(this.gl, unit)
+        } else {
+            mesh.material.uniforms.uTexture = -1
+        }
     }
     renderMesh(mesh: Mesh) {
 

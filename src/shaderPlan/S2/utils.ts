@@ -17,6 +17,7 @@ export function createSphere(radius: number, divideByYAxis: number, divideByCirc
     let circleUnitAngle = (Math.PI * 2) / divideByCircle;
     let positions = [];
     let normals = [];
+    let uv = []
     for (let i = 0; i <= divideByYAxis; i++) {
         let unitY = Math.cos(yUnitAngle * i);
         let yValue = radius * unitY;
@@ -28,6 +29,7 @@ export function createSphere(radius: number, divideByYAxis: number, divideByCirc
             let zValue = radius * unitZ;
             positions.push(xValue, yValue, zValue);
             normals.push(unitX, unitY, unitZ);
+            uv.push(j / divideByCircle, i / divideByYAxis)
         }
     }
 
@@ -47,7 +49,8 @@ export function createSphere(radius: number, divideByYAxis: number, divideByCirc
     return {
         positions: new Float32Array(positions),
         indices: new Uint16Array(indices),
-        normals: new Float32Array(normals)
+        normals: new Float32Array(normals),
+        uv: new Float32Array(uv)
     };
 }
 export function isMesh(mesh: Object3D): mesh is Mesh {
@@ -63,4 +66,74 @@ export function colorToLinear(color: ArrayLike<number>): vec3 {
         srgbToLinear(color[1]),
         srgbToLinear(color[2]),
     )
+}
+
+export function createCheckerCanvas(size = 512, cells = 8): HTMLCanvasElement {
+    const c = document.createElement('canvas')
+    c.width = c.height = size
+    const ctx = c.getContext('2d')!
+    const cell = size / cells
+    for (let y = 0; y < cells; y++) {
+        for (let x = 0; x < cells; x++) {
+            ctx.fillStyle = (x + y) % 2 === 0 ? '#ffffff' : '#000000'
+            ctx.fillRect(x * cell, y * cell, cell, cell)
+        }
+    }
+    return c
+}
+
+export function createPlane(
+    width = 1,
+    height = 1,
+    segX = 1,
+    segY = 1
+) {
+    if (segX < 1 || segY < 1) {
+        throw new Error("segX 和 segY 必须 >= 1")
+    }
+
+    const positions: number[] = []
+    const normals: number[] = []
+    const uv: number[] = []
+    const indices: number[] = []
+
+    const halfW = width * 0.5
+    const halfH = height * 0.5
+
+    // 顶点：按行列生成
+    for (let y = 0; y <= segY; y++) {
+        const v = y / segY
+        const z = v * height - halfH
+
+        for (let x = 0; x <= segX; x++) {
+            const u = x / segX
+            const px = u * width - halfW
+
+            // XZ 平面，Y=0
+            positions.push(px, 0, z)
+            normals.push(0, 1, 0)
+            uv.push(u, v)
+        }
+    }
+
+    // 索引：每个网格两个三角形
+    const row = segX + 1
+    for (let y = 0; y < segY; y++) {
+        for (let x = 0; x < segX; x++) {
+            const a = y * row + x
+            const b = a + 1
+            const c = a + row
+            const d = c + 1
+
+            indices.push(a, b, c)
+            indices.push(c, b, d)
+        }
+    }
+
+    return {
+        positions: new Float32Array(positions),
+        indices: new Uint16Array(indices),
+        normals: new Float32Array(normals),
+        uv: new Float32Array(uv)
+    }
 }
