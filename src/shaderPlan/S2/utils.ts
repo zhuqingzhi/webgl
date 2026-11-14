@@ -81,6 +81,13 @@ export function createCheckerCanvas(size = 512, cells = 8): HTMLCanvasElement {
     }
     return c
 }
+export function createWhiteCanvas(size = 512, cells = 8): HTMLCanvasElement {
+    const c = document.createElement('canvas')
+    c.width = c.height = size
+    const ctx = c.getContext('2d')!
+    ctx.fillRect(0, 0, size, size)
+    return c
+}
 
 export function createPlane(
     width = 1,

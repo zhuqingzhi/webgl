@@ -3,7 +3,7 @@
 // 直接上手threejs的设计理念还是太难了
 
 import { mat3, mat4, vec3, vec4 } from "gl-matrix"
-import { colorToLinear, computeTangents, createShader, isMesh } from "./utils"
+import { colorToLinear, computeTangents, createShader, createWhiteCanvas, isMesh } from "./utils"
 const MAX_LIGHTS = 8
 // 职责：顶点数据，主要管什么形状
 export class Geometry {
@@ -329,16 +329,17 @@ type PhongMaterialType = {
     shininess?: number,
     specular?: vec3,
     map?: Texture,
-    normalMap?: Texture
+    normalMap?: Texture,
+    procedural?: ProceduralType
 }
-
+type ProceduralType = 'none' | 'checker' | 'wood' | 'marble' | 'cloud'
 export class MeshPhongMaterial extends Material {
     vertexString = `#version 300 es
         in vec3 aPosition;
         in vec3 aNormal;
         in vec2 aUv;
         in vec3 aTangent;
-        out vec2 uUv;
+        out vec2 vUv;
         out vec3 vNormal;
         out vec3 vWorldPos;
         out vec3 vTangent;
@@ -351,7 +352,7 @@ export class MeshPhongMaterial extends Material {
             vWorldPos=worldPos.xyz;
             vNormal=normalize(normalMatrix*aNormal);
             gl_Position=projectionMatrix*viewMatrix*worldPos;
-            uUv=aUv;
+            vUv=aUv;
             vTangent=normalize(normalMatrix*aTangent);
         }
     `
@@ -367,7 +368,7 @@ export class MeshPhongMaterial extends Material {
         uniform vec3 uDirectLightDirection[MAX_LIGHTS];
         uniform float uDirectLightIntensity[MAX_LIGHTS];
         uniform int uDirLightCount;
-        in vec2 uUv;
+        in vec2 vUv;
         in vec3 vTangent;
 
         uniform sampler2D uTexture;
@@ -379,6 +380,7 @@ export class MeshPhongMaterial extends Material {
         uniform vec3 uAmbientColor;
 
         uniform vec3 uCameraPos;
+        uniform int uProcedural;
 
         struct Material{
             vec3 color;
@@ -386,6 +388,7 @@ export class MeshPhongMaterial extends Material {
             float shininess;
         };
         uniform Material uMaterial;
+        uniform float uTime;
 
         vec3 linearToSrgb(vec3 c) {
             return mix(
@@ -394,7 +397,67 @@ export class MeshPhongMaterial extends Material {
                 step(vec3(0.0031308), c)
             );
         }
+        float checker(vec2 uv, float n) {
+            vec2 p = uv * n;
+            vec2 w = fwidth(p);                       // 屏幕空间导数，一个像素跨多少格子
+            vec2 i = 2.0 * (abs(fract((p - 0.5 * w) * 0.5) - 0.5)
+                        - abs(fract((p + 0.5 * w) * 0.5) - 0.5)) / w;
+            return 0.5 - 0.5 * i.x * i.y;
+        }
+        float hash(vec2 p) {
+            p = fract(p * vec2(123.34, 456.21));
+            p += dot(p, p + 45.32);
+            return fract(p.x * p.y);
+        }
+        float noise(vec2 p) {
+            vec2 i = floor(p);              // 格子索引
+            vec2 f = fract(p);              // 格内坐标 0~1
+            f = f * f * (3.0 - 2.0 * f);    // smoothstep，让插值在边界处平滑
 
+            float a = hash(i);                          // 左下
+            float b = hash(i + vec2(1.0, 0.0));         // 右下
+            float c = hash(i + vec2(0.0, 1.0));         // 左上
+            float d = hash(i + vec2(1.0, 1.0));         // 右上
+
+            return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+        }
+        float fbm(vec2 p) {
+            float v = 0.0;
+            float a = 0.5;
+            for (int i = 0; i < 5; i++) {
+                v += a * noise(p);
+                p *= 2.0;       // 频率翻倍
+                a *= 0.5;       // 振幅减半
+            }
+            return v;
+        }
+        vec3 wood(vec2 uv) {
+            vec2 q = uv * vec2(2.0, 1.0);
+            float grain = fbm(q * 4.0);                      // 木纹扰动
+            float rings = sin((q.x * 8.0 + grain * 3.0) * 3.14159);
+            return mix(vec3(0.35, 0.18, 0.08),
+                    vec3(0.70, 0.45, 0.25),
+                    rings * 0.5 + 0.5);
+        }
+        vec3 marble(vec2 uv) {
+            float m = fbm(uv * 3.0);
+            float veins = abs(sin(uv.x * 6.0 + m * 8.0));
+            return mix(vec3(0.05), vec3(0.95), pow(veins, 0.3));
+        }
+        vec3 cloud(vec2 uv) {
+            float c = fbm(uv * 8.0+uTime*0.001);
+            return mix(vec3(0.30, 0.50, 0.80),
+                    vec3(1.0),
+                    smoothstep(0.5, 0.9, c));
+        }
+        vec3 computeAlbedo() {
+            if (uProcedural == 0) return uMaterial.color * texture(uTexture, vUv).rgb;
+            if (uProcedural == 1) return vec3(checker(vUv, 8.0));
+            if (uProcedural == 2) return wood(vUv);
+            if (uProcedural == 3) return marble(vUv);
+            if (uProcedural == 4) return cloud(vUv);
+            return uMaterial.color;
+        }
         void main(){
             vec3 totalDiffuse=vec3(0.);
             vec3 totalSpecular=vec3(0.);
@@ -404,16 +467,16 @@ export class MeshPhongMaterial extends Material {
                 vec3 T=normalize(vTangent);
                 vec3 B=normalize(cross(N,T));
                 mat3 TBN=mat3(T,B,N);
-                vec3 n=texture(uNormalMap,uUv).xyz*2.-1.;
+                vec3 n=texture(uNormalMap,vUv).xyz*2.-1.;
                 N=normalize(TBN*n);
             }
 
             vec3 V=normalize(uCameraPos-vWorldPos);
-            vec4 tex=texture(uTexture,uUv);
+            vec4 tex=texture(uTexture,vUv);
        
             
-            vec3 albedo=uMaterial.color*tex.rgb;
-            vec3 ambientColor=albedo*uAmbientColor;
+            vec3 albedo = computeAlbedo();
+            vec3 ambientColor = albedo * uAmbientColor;
             vec3 col=ambientColor;
             
 
@@ -461,12 +524,15 @@ export class MeshPhongMaterial extends Material {
     type: string = 'MeshPhongMaterial'
     map?: Texture
     normalMap?: Texture
+    procedural?: ProceduralType
+
     constructor(params: MaterialParamsType & PhongMaterialType) {
         super(params)
         this.specular = colorToLinear(params.specular ?? [1, 1, 1])
         this.shininess = params.shininess ?? 30
         this.map = params.map
         this.normalMap = params.normalMap
+        this.procedural = params.procedural
     }
     syncUniforms(): void {
         super.syncUniforms()
@@ -475,6 +541,8 @@ export class MeshPhongMaterial extends Material {
         this.uniforms['uMaterial.specular'] = this.specular ?? [1, 1, 1]
         this.uniforms['uMaterial.shininess'] = this.shininess ?? 30
         this.uniforms['uHasNormalMap'] = !!this.normalMap
+        const PROC_MAP = { none: 0, checker: 1, wood: 2, marble: 3, cloud: 4 }
+        this.uniforms.uProcedural = PROC_MAP[this.procedural ?? 'none']
     }
 }
 
@@ -513,6 +581,7 @@ export class Texture {
         this.minFilter = minFilter
         this.magFilter = magFilter
         this.colorSpace = colorSpace
+
     }
     init(gl: WebGL2RenderingContext, unit: number) {
         let texture = this.texture
@@ -521,6 +590,7 @@ export class Texture {
         gl.bindTexture(gl.TEXTURE_2D, texture)
 
         if (!this.needUpdate) return
+
         const internalFormat = this.colorSpace === 'srgb' ? gl.SRGB8_ALPHA8 : gl.RGBA8
         if (!this.ready) {
             gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
@@ -718,6 +788,8 @@ export class Renderer {
     gl: WebGL2RenderingContext
     camera!: Camera
     scene!: Object3D[]
+    time!: number
+    private startTime: number
     constructor(params: RendererParamType) {
         if (!params.el) {
             params.el = document.createElement("canvas")
@@ -727,8 +799,10 @@ export class Renderer {
             throw new Error("未获取到context")
         }
         this.gl = context
+        this.startTime = performance.now()
     }
     render(list: Object3D[], camera: Camera) {
+        this.time = performance.now() - this.startTime
         this.camera = camera
         this.scene = list
         this._render()
@@ -858,11 +932,13 @@ export class Renderer {
         mesh.material.uniforms.modelMatrix = mesh.worldMatrix
         mesh.material.uniforms.normalMatrix = mesh.normalMatrix
         mesh.material.uniforms.uCameraPos = this.camera.position
+        mesh.material.uniforms.uTime = this.time
     }
     private injectMaterialUniforms(mesh: Mesh) {
         mesh.material.syncUniforms()
         const mat = mesh.material as MeshPhongMaterial
         let unit = 0
+
         if (mat.map) {
             mat.map.init(this.gl, unit)
             mat.map.bind(this.gl, unit)

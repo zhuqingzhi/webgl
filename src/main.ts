@@ -65,8 +65,11 @@ const mat2 = new MeshPhongMaterial({
   color: [1, 1, 1],
   specular: [1, 1, 1],
   shininess: 32,
-  map: checker,
-  normalMap: normalTex
+  procedural: 'checker',
+  // procedural: "wood",
+  // procedural: "marble",
+  // procedural: "cloud"
+  // normalMap: normalTex
 })
 /* const mat2 = new MeshLambertMaterial({
   color: [1, 0.5, 0],
@@ -95,80 +98,10 @@ const planeMat = new MeshPhongMaterial({
   shininess: 32,
   map: texture,
 })
-const plane = new Mesh(planeGeo, planeMat)
-plane.position = [-20, 0, -30]
-plane.scale = [3, 3, 3]
+const plane = new Mesh(planeGeo, mat2)
+// plane.position = [-20, 0, -30]
+plane.scale = [10, 10, 10]
 plane.rotation[0] = -Math.PI / 2
-
-const planeMap2 = new Texture({
-  image: createNormalMapCanvas(256, 5),
-  wrapS: renderer.gl.REPEAT,
-  wrapT: renderer.gl.REPEAT,
-  minFilter: renderer.gl.LINEAR_MIPMAP_LINEAR,
-
-})
-planeMap2.ready = true
-
-const planeMat2 = new MeshPhongMaterial({
-  color: [1, 1, 1],
-  specular: [0.5, 0.5, 0.5],
-  shininess: 32,
-  normalMap: planeMap2,
-  map: checker
-})
-const plane2 = new Mesh(planeGeo, planeMat2)
-plane2.position = [0, 0, 0]
-plane2.scale = [3, 3, 3]
-plane2.rotation[0] = -Math.PI / 2
-
-const planeMap3 = new Texture({
-  image,
-  wrapS: renderer.gl.REPEAT,
-  wrapT: renderer.gl.REPEAT,
-  /* wrapS: renderer.gl.MIRRORED_REPEAT,
-  wrapT: renderer.gl.MIRRORED_REPEAT, */
-  /* magFilter: renderer.gl.NEAREST,
-  minFilter: renderer.gl.NEAREST, */
-  minFilter: renderer.gl.LINEAR,
-
-})
-planeMap3.ready = true
-
-const planeMat3 = new MeshPhongMaterial({
-  color: [1, 1, 1],
-  specular: [0.5, 0.5, 0.5],
-  shininess: 32,
-  map: planeMap3
-})
-const plane3 = new Mesh(planeGeo, planeMat3)
-plane3.position = [0, 0, -30]
-plane3.scale = [3, 3, 3]
-plane3.rotation[0] = -Math.PI / 2
-
-
-
-const planeMap4 = new Texture({
-  image,
-  wrapS: renderer.gl.REPEAT,
-  wrapT: renderer.gl.REPEAT,
-  /* wrapS: renderer.gl.MIRRORED_REPEAT,
-  wrapT: renderer.gl.MIRRORED_REPEAT, */
-  /* magFilter: renderer.gl.NEAREST,
-  minFilter: renderer.gl.NEAREST, */
-  minFilter: renderer.gl.LINEAR,
-
-})
-planeMap4.ready = true
-const planeMat4 = new MeshPhongMaterial({
-  color: [1, 1, 1],
-  specular: [0.5, 0.5, 0.5],
-  shininess: 32,
-  map: planeMap4,
-})
-const plane4 = new Mesh(planeGeo, planeMat4)
-plane4.position = [10, 0, -30]
-plane4.scale = [3, 3, 3]
-plane4.rotation[0] = -Math.PI / 3
 
 const directionalLight = new DirectionalLight([1, 1, 1], 1)
 directionalLight.position = [1, 0, 0]
@@ -190,7 +123,7 @@ spotLight3.position = [0, 0, 5]
 function render() {
   const t = performance.now() * 0.001
   sphere2.rotation[1] += 0.03
-  renderer.render([directionalLight, ambientLight, sphere2], camera)
+  renderer.render([directionalLight, ambientLight, plane], camera)
   requestAnimationFrame(render)
 }
 render()
