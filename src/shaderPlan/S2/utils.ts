@@ -137,3 +137,67 @@ export function createPlane(
         uv: new Float32Array(uv)
     }
 }
+
+export function computeTangents(
+    positions: Float32Array,
+    normals: Float32Array,
+    uvs: Float32Array,
+    indices: Uint16Array
+): Float32Array {
+    const vertexCount = positions.length / 3
+    const tan1 = new Float32Array(vertexCount * 3)   // 累加器
+    const tan2 = new Float32Array(vertexCount * 3)
+
+    for (let i = 0; i < indices.length; i += 3) {
+        const i0 = indices[i], i1 = indices[i + 1], i2 = indices[i + 2]
+
+        const x1 = positions[i1 * 3] - positions[i0 * 3]
+        const y1 = positions[i1 * 3 + 1] - positions[i0 * 3 + 1]
+        const z1 = positions[i1 * 3 + 2] - positions[i0 * 3 + 2]
+        const x2 = positions[i2 * 3] - positions[i0 * 3]
+        const y2 = positions[i2 * 3 + 1] - positions[i0 * 3 + 1]
+        const z2 = positions[i2 * 3 + 2] - positions[i0 * 3 + 2]
+
+        const s1 = uvs[i1 * 2] - uvs[i0 * 2]
+        const t1 = uvs[i1 * 2 + 1] - uvs[i0 * 2 + 1]
+        const s2 = uvs[i2 * 2] - uvs[i0 * 2]
+        const t2 = uvs[i2 * 2 + 1] - uvs[i0 * 2 + 1]
+
+        const det = s1 * t2 - s2 * t1
+        if (Math.abs(det) < 1e-8) continue          // UV 退化的三角形，跳过
+        const r = 1 / det
+
+        const sdirX = (x1 * t2 - x2 * t1) * r
+        const sdirY = (y1 * t2 - y2 * t1) * r
+        const sdirZ = (z1 * t2 - z2 * t1) * r
+        const tdirX = (x2 * s1 - x1 * s2) * r
+        const tdirY = (y2 * s1 - y1 * s2) * r
+        const tdirZ = (z2 * s1 - z1 * s2) * r
+
+        for (const j of [i0, i1, i2]) {
+            tan1[j * 3] += sdirX
+            tan1[j * 3 + 1] += sdirY
+            tan1[j * 3 + 2] += sdirZ
+            tan2[j * 3] += tdirX
+            tan2[j * 3 + 1] += tdirY
+            tan2[j * 3 + 2] += tdirZ
+        }
+    }
+
+    // Gram-Schmidt 正交化：T 减去它在 N 上的投影
+    const tangents = new Float32Array(vertexCount * 3)
+    for (let i = 0; i < vertexCount; i++) {
+        const nx = normals[i * 3], ny = normals[i * 3 + 1], nz = normals[i * 3 + 2]
+        let tx = tan1[i * 3], ty = tan1[i * 3 + 1], tz = tan1[i * 3 + 2]
+
+        const d = nx * tx + ny * ty + nz * tz
+        tx -= nx * d; ty -= ny * d; tz -= nz * d
+
+        const len = Math.hypot(tx, ty, tz) || 1
+        tangents[i * 3] = tx / len
+        tangents[i * 3 + 1] = ty / len
+        tangents[i * 3 + 2] = tz / len
+    }
+
+    return tangents
+}

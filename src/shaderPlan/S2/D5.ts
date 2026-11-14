@@ -3,7 +3,7 @@
 // 直接上手threejs的设计理念还是太难了
 
 import { mat3, mat4, vec3, vec4 } from "gl-matrix"
-import { colorToLinear, createShader, isMesh } from "./utils"
+import { colorToLinear, computeTangents, createShader, isMesh } from "./utils"
 const MAX_LIGHTS = 8
 // 职责：顶点数据，主要管什么形状
 export class Geometry {
@@ -12,6 +12,7 @@ export class Geometry {
     positions: Float32Array
     vao!: WebGLVertexArrayObject
     uv: Float32Array
+    tangent: Float32Array
     constructor(params: {
         normals: Float32Array,
         indices: Uint16Array,
@@ -22,6 +23,7 @@ export class Geometry {
         this.indices = params.indices
         this.positions = params.positions
         this.uv = params.uv
+        this.tangent = computeTangents(this.positions, this.normals, this.uv, this.indices)
     }
     init(gl: WebGL2RenderingContext, program: WebGLProgram) {
         const vao = gl.createVertexArray()
@@ -29,6 +31,7 @@ export class Geometry {
         const aPositionLoc = gl.getAttribLocation(program, "aPosition")
         const aNormalLoc = gl.getAttribLocation(program, "aNormal")
         const aUvLoc = gl.getAttribLocation(program, "aUv")
+        const aTangentLoc = gl.getAttribLocation(program, "aTangent")
         this.recordAttrib(gl, aUvLoc, {
             name: "aUvLoc",
             data: this.uv,
@@ -42,6 +45,11 @@ export class Geometry {
         this.recordAttrib(gl, aNormalLoc, {
             name: "aNormal",
             data: this.normals,
+            size: 3
+        })
+        this.recordAttrib(gl, aTangentLoc, {
+            name: "aTangent",
+            data: this.tangent,
             size: 3
         })
         const ebo = gl.createBuffer()
@@ -320,7 +328,8 @@ export class MeshLambertMaterial extends Material {
 type PhongMaterialType = {
     shininess?: number,
     specular?: vec3,
-    map?: Texture
+    map?: Texture,
+    normalMap?: Texture
 }
 
 export class MeshPhongMaterial extends Material {
@@ -328,9 +337,11 @@ export class MeshPhongMaterial extends Material {
         in vec3 aPosition;
         in vec3 aNormal;
         in vec2 aUv;
+        in vec3 aTangent;
         out vec2 uUv;
         out vec3 vNormal;
         out vec3 vWorldPos;
+        out vec3 vTangent;
         uniform mat4 modelMatrix;
         uniform mat3 normalMatrix;
         uniform mat4 viewMatrix;
@@ -341,6 +352,7 @@ export class MeshPhongMaterial extends Material {
             vNormal=normalize(normalMatrix*aNormal);
             gl_Position=projectionMatrix*viewMatrix*worldPos;
             uUv=aUv;
+            vTangent=normalize(normalMatrix*aTangent);
         }
     `
     fragmentString = `#version 300 es
@@ -356,16 +368,16 @@ export class MeshPhongMaterial extends Material {
         uniform float uDirectLightIntensity[MAX_LIGHTS];
         uniform int uDirLightCount;
         in vec2 uUv;
+        in vec3 vTangent;
 
         uniform sampler2D uTexture;
+        uniform sampler2D uNormalMap;
+        uniform bool uHasNormalMap;
 
         in vec3 vNormal;
         in vec3 vWorldPos;
         uniform vec3 uAmbientColor;
 
-        // uniform vec3 uColor;
-        // uniform vec3 uSpecular;
-        // uniform float uShininess;
         uniform vec3 uCameraPos;
 
         struct Material{
@@ -387,10 +399,18 @@ export class MeshPhongMaterial extends Material {
             vec3 totalDiffuse=vec3(0.);
             vec3 totalSpecular=vec3(0.);
             vec3 N=normalize(vNormal);
+
+            if(uHasNormalMap){
+                vec3 T=normalize(vTangent);
+                vec3 B=normalize(cross(N,T));
+                mat3 TBN=mat3(T,B,N);
+                vec3 n=texture(uNormalMap,uUv).xyz*2.-1.;
+                N=normalize(TBN*n);
+            }
+
             vec3 V=normalize(uCameraPos-vWorldPos);
             vec4 tex=texture(uTexture,uUv);
        
-            
             
             vec3 albedo=uMaterial.color*tex.rgb;
             vec3 ambientColor=albedo*uAmbientColor;
@@ -432,6 +452,7 @@ export class MeshPhongMaterial extends Material {
             col = col / (col + vec3(1.0));
             fragColor=vec4(linearToSrgb(col),1.);
             // fragColor=tex;
+
         }
     
     `
@@ -439,11 +460,13 @@ export class MeshPhongMaterial extends Material {
     shininess: number
     type: string = 'MeshPhongMaterial'
     map?: Texture
+    normalMap?: Texture
     constructor(params: MaterialParamsType & PhongMaterialType) {
         super(params)
         this.specular = colorToLinear(params.specular ?? [1, 1, 1])
         this.shininess = params.shininess ?? 30
         this.map = params.map
+        this.normalMap = params.normalMap
     }
     syncUniforms(): void {
         super.syncUniforms()
@@ -451,6 +474,7 @@ export class MeshPhongMaterial extends Material {
         this.uniforms['uShininess'] = this.shininess ?? 30
         this.uniforms['uMaterial.specular'] = this.specular ?? [1, 1, 1]
         this.uniforms['uMaterial.shininess'] = this.shininess ?? 30
+        this.uniforms['uHasNormalMap'] = !!this.normalMap
     }
 }
 
@@ -477,11 +501,11 @@ export class Texture {
     ready: boolean = false
     private texture: WebGLTexture | null = null
     needUpdate: boolean = true
-    colorSpace?: TextureParamsType['colorSpace'] = "srgb"
+    colorSpace?: TextureParamsType['colorSpace'] = "linear"
     constructor(params: TextureParamsType) {
         const { wrapS = defaultTextureParameter.wrapS, wrapT = defaultTextureParameter.wrapT,
             minFilter = defaultTextureParameter.minFilter, magFilter = defaultTextureParameter.magFilter,
-            colorSpace = 'srgb'
+            colorSpace = 'linear'
         } = params
         this.image = params.image
         this.wrapS = wrapS
@@ -490,9 +514,10 @@ export class Texture {
         this.magFilter = magFilter
         this.colorSpace = colorSpace
     }
-    init(gl: WebGL2RenderingContext) {
+    init(gl: WebGL2RenderingContext, unit: number) {
         let texture = this.texture
         if (!texture) texture = this.texture = gl.createTexture()
+        gl.activeTexture(gl.TEXTURE0 + unit)
         gl.bindTexture(gl.TEXTURE_2D, texture)
 
         if (!this.needUpdate) return
@@ -836,13 +861,17 @@ export class Renderer {
     }
     private injectMaterialUniforms(mesh: Mesh) {
         mesh.material.syncUniforms()
-        const map = (mesh.material as any).map
+        const mat = mesh.material as MeshPhongMaterial
         let unit = 0
-        map.init(this.gl)
-        if (map?.ready) {
-            map.bind(this.gl, unit)
-        } else {
-            mesh.material.uniforms.uTexture = -1
+        if (mat.map) {
+            mat.map.init(this.gl, unit)
+            mat.map.bind(this.gl, unit)
+            unit++
+        }
+        if (mat.normalMap) {
+            mat.normalMap.init(this.gl, unit)
+            mat.normalMap.bind(this.gl, unit)
+            unit++
         }
     }
     renderMesh(mesh: Mesh) {
@@ -858,4 +887,32 @@ export class Renderer {
         this.gl.drawElements(this.gl.TRIANGLES, mesh.geometry.indices.length, this.gl.UNSIGNED_SHORT, 0)
         this.gl.bindVertexArray(null)
     }
+}
+
+export function createNormalMapCanvas(size = 256, freq = 8): HTMLCanvasElement {
+    const c = document.createElement('canvas')
+    c.width = c.height = size
+    const ctx = c.getContext('2d')!
+    const img = ctx.createImageData(size, size)
+
+    for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+            const u = x / size, v = y / size
+            const w = Math.PI * 2 * freq
+            // 高度场 h = sin(u*w) * cos(v*w)，梯度即法线的 xy
+            const dx = Math.cos(u * w) * w
+            const dy = -Math.sin(v * w) * w
+            // 法线 = normalize(-dx, -dy, 1)，缩放一下避免过陡
+            const nx = -dx * 0.02, ny = -dy * 0.02, nz = 1
+            const len = Math.hypot(nx, ny, nz)
+
+            const i = (y * size + x) * 4
+            img.data[i] = ((nx / len) * 0.5 + 0.5) * 255
+            img.data[i + 1] = ((ny / len) * 0.5 + 0.5) * 255
+            img.data[i + 2] = ((nz / len) * 0.5 + 0.5) * 255
+            img.data[i + 3] = 255
+        }
+    }
+    ctx.putImageData(img, 0, 0)
+    return c
 }

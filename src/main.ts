@@ -1,5 +1,5 @@
 import { mat4, vec3 } from "gl-matrix"
-import { AmbientLight, DirectionalLight, Geometry, Material, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshPhongMaterial, Object3D, PerspectiveCamera, Renderer, SpotLight, Texture, TextureLoader } from "./shaderPlan/S2/D5"
+import { AmbientLight, createNormalMapCanvas, DirectionalLight, Geometry, Material, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshPhongMaterial, Object3D, PerspectiveCamera, Renderer, SpotLight, Texture, TextureLoader } from "./shaderPlan/S2/D5"
 import { createCheckerCanvas, createPlane, createSphere } from "./shaderPlan/S2/utils"
 function createShader(gl: WebGL2RenderingContext, source: string, type: WebGLRenderingContextBase['VERTEX_SHADER'] | WebGLRenderingContextBase['FRAGMENT_SHADER']) {
   const shader = gl.createShader(type)
@@ -47,22 +47,32 @@ const image = createCheckerCanvas(512, 8)
 }) */
 const checker = new Texture({
   image,
-  wrapS: renderer.gl.MIRRORED_REPEAT,
-  wrapT: renderer.gl.MIRRORED_REPEAT,
-  minFilter: renderer.gl.LINEAR_MIPMAP_LINEAR
+  wrapS: renderer.gl.REPEAT,
+  wrapT: renderer.gl.REPEAT,
+  minFilter: renderer.gl.LINEAR_MIPMAP_LINEAR,
+  colorSpace: "linear"
 })
 checker.ready = true
+const normalTex = new Texture({
+  image: createNormalMapCanvas(256, 5),
+  wrapS: renderer.gl.REPEAT,
+  wrapT: renderer.gl.REPEAT,
+  minFilter: renderer.gl.LINEAR_MIPMAP_LINEAR,
+  colorSpace: "linear"
+})
+normalTex.ready = true
 const mat2 = new MeshPhongMaterial({
   color: [1, 1, 1],
-  specular: [0.5, 0.5, 0.5],
+  specular: [1, 1, 1],
   shininess: 32,
-  map: checker
+  map: checker,
+  normalMap: normalTex
 })
 /* const mat2 = new MeshLambertMaterial({
   color: [1, 0.5, 0],
 }) */
 const sphere2 = new Mesh(geo, mat2)
-sphere2.position = [0, 5, 0]
+sphere2.position = [0, 0, 0]
 
 const planeParam = createPlane(1, 1, 10, 10)
 const planeGeo = new Geometry(planeParam)
@@ -91,14 +101,10 @@ plane.scale = [3, 3, 3]
 plane.rotation[0] = -Math.PI / 2
 
 const planeMap2 = new Texture({
-  image,
-  wrapS: renderer.gl.CLAMP_TO_EDGE,
-  wrapT: renderer.gl.CLAMP_TO_EDGE,
-  /* wrapS: renderer.gl.MIRRORED_REPEAT,
-  wrapT: renderer.gl.MIRRORED_REPEAT, */
-  /* magFilter: renderer.gl.NEAREST,
-  */
-  minFilter: renderer.gl.LINEAR_MIPMAP_NEAREST,
+  image: createNormalMapCanvas(256, 5),
+  wrapS: renderer.gl.REPEAT,
+  wrapT: renderer.gl.REPEAT,
+  minFilter: renderer.gl.LINEAR_MIPMAP_LINEAR,
 
 })
 planeMap2.ready = true
@@ -107,10 +113,11 @@ const planeMat2 = new MeshPhongMaterial({
   color: [1, 1, 1],
   specular: [0.5, 0.5, 0.5],
   shininess: 32,
-  map: planeMap2
+  normalMap: planeMap2,
+  map: checker
 })
 const plane2 = new Mesh(planeGeo, planeMat2)
-plane2.position = [-10, 0, -30]
+plane2.position = [0, 0, 0]
 plane2.scale = [3, 3, 3]
 plane2.rotation[0] = -Math.PI / 2
 
@@ -164,7 +171,8 @@ plane4.scale = [3, 3, 3]
 plane4.rotation[0] = -Math.PI / 3
 
 const directionalLight = new DirectionalLight([1, 1, 1], 1)
-directionalLight.position = [1, 1, 1]
+directionalLight.position = [1, 0, 0]
+directionalLight.position = [-1, 0, 0]
 const target = new Object3D()
 target.position = [0, 0, 0]
 directionalLight.target = target
@@ -181,12 +189,8 @@ spotLight3.position = [0, 0, 5]
 
 function render() {
   const t = performance.now() * 0.001
-  plane.position[2] = -30 + Math.sin(t) * 20
-  plane2.position[2] = -30 + Math.sin(t) * 20
-  plane3.position[2] = -30 + Math.sin(t) * 20
-  plane4.position[2] = -30 + Math.sin(t) * 20
   sphere2.rotation[1] += 0.03
-  renderer.render([plane, plane2, plane3, plane4, directionalLight, ambientLight, sphere2], camera)
+  renderer.render([directionalLight, ambientLight, sphere2], camera)
   requestAnimationFrame(render)
 }
 render()
