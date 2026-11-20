@@ -208,3 +208,30 @@ export function computeTangents(
 
     return tangents
 }
+export function createNormalMapCanvas(size = 256, freq = 8): HTMLCanvasElement {
+    const c = document.createElement('canvas')
+    c.width = c.height = size
+    const ctx = c.getContext('2d')!
+    const img = ctx.createImageData(size, size)
+
+    for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+            const u = x / size, v = y / size
+            const w = Math.PI * 2 * freq
+            // 高度场 h = sin(u*w) * cos(v*w)，梯度即法线的 xy
+            const dx = Math.cos(u * w) * w
+            const dy = -Math.sin(v * w) * w
+            // 法线 = normalize(-dx, -dy, 1)，缩放一下避免过陡
+            const nx = -dx * 0.02, ny = -dy * 0.02, nz = 1
+            const len = Math.hypot(nx, ny, nz)
+
+            const i = (y * size + x) * 4
+            img.data[i] = ((nx / len) * 0.5 + 0.5) * 255
+            img.data[i + 1] = ((ny / len) * 0.5 + 0.5) * 255
+            img.data[i + 2] = ((nz / len) * 0.5 + 0.5) * 255
+            img.data[i + 3] = 255
+        }
+    }
+    ctx.putImageData(img, 0, 0)
+    return c
+}

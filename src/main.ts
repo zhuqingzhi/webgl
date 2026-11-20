@@ -1,17 +1,12 @@
-import { mat4, vec3 } from "gl-matrix"
-import { AmbientLight, createNormalMapCanvas, DirectionalLight, Geometry, Material, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshPhongMaterial, Object3D, PerspectiveCamera, Renderer, SpotLight, Texture, TextureLoader } from "./shaderPlan/S2/D5"
-import { createCheckerCanvas, createPlane, createSphere } from "./shaderPlan/S2/utils"
-function createShader(gl: WebGL2RenderingContext, source: string, type: WebGLRenderingContextBase['VERTEX_SHADER'] | WebGLRenderingContextBase['FRAGMENT_SHADER']) {
-  const shader = gl.createShader(type)
-  const shaderType = type === gl.VERTEX_SHADER ? '顶点着色器' : "片元着色器"
-  if (!shader) throw new Error(shaderType + "创建失败")
-  gl.shaderSource(shader, source)
-  gl.compileShader(shader)
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    throw new Error(shaderType + "编译失败:" + gl.getShaderInfoLog(shader))
-  }
-  return shader
-}
+import { Geometry, Mesh, Object3D, PerspectiveCamera, } from "./shaderPlan/S2/D5"
+import { createCheckerCanvas, createNormalMapCanvas, createPlane, createSphere } from "./shaderPlan/S2/utils"
+import { MeshPhongMaterial, type PostEffectType } from "./shaderPlan/S2/Materials"
+import { TextureLoader } from "./shaderPlan/S2/Loader";
+import { Texture } from "./shaderPlan/S2/Textures";
+import { Renderer } from "./shaderPlan/S2/Renderer";
+import { AmbientLight, DirectionalLight, SpotLight } from "./shaderPlan/S2/Light";
+import GUI from "three/examples/jsm/libs/lil-gui.module.min.js";
+
 
 const canvas = document.getElementById("canvas")! as HTMLCanvasElement;
 canvas.style.width = window.innerWidth + "px"
@@ -91,6 +86,7 @@ const planeMap = new Texture({
   // minFilter: renderer.gl.NEAREST,
 
 })
+renderer.gl.framebufferTexture2D
 planeMap.ready = true
 const planeMat = new MeshPhongMaterial({
   color: [1, 1, 1],
@@ -98,8 +94,8 @@ const planeMat = new MeshPhongMaterial({
   shininess: 32,
   map: texture,
 })
-const plane = new Mesh(planeGeo, mat2)
-// plane.position = [-20, 0, -30]
+const plane = new Mesh(planeGeo, planeMat)
+plane.position = [0, 0, 1]
 plane.scale = [10, 10, 10]
 plane.rotation[0] = -Math.PI / 2
 
@@ -118,6 +114,19 @@ spotLight2.position = [0, 5, 0]
 const spotLight3 = new SpotLight([0, 0, 1], 10)
 spotLight3.position = [0, 0, 5]
 
+const gui = new GUI({
+  autoPlace: true
+})
+const obj = {
+  uLightIntensity: 0.3,
+  uIntensity: 0.8
+}
+gui.add(obj, 'uLightIntensity', 0, 1, 0.1).name("提取光强度").onChange(val => {
+  renderer.postProcessMaterial.uniforms.uLightIntensity = val
+})
+gui.add(obj, 'uIntensity', 0, 10, 0.1).name("辉光强度").onChange(val => {
+  renderer.compositeMaterial.uniforms.uIntensity = val
+})
 
 
 function render() {
@@ -127,3 +136,13 @@ function render() {
   requestAnimationFrame(render)
 }
 render()
+
+const effects: PostEffectType[] = ['none', 'grayscale', 'invert', 'chromatic', 'vignette', 'scanline']
+let idx = 0
+window.addEventListener('keydown', e => {
+  if (e.key === ' ') {
+    idx = (idx + 1) % effects.length
+    renderer.postProcessMaterial.effect = effects[idx]
+    console.log('effect:', effects[idx])
+  }
+})
