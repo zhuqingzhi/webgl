@@ -92,7 +92,7 @@ const planeMat = new MeshPhongMaterial({
   color: [1, 1, 1],
   specular: [0.5, 0.5, 0.5],
   shininess: 32,
-  map: texture,
+  map: planeMap,
 })
 const plane = new Mesh(planeGeo, planeMat)
 plane.position = [0, 0, 1]

@@ -40,9 +40,13 @@ export class Renderer {
             throw new Error("未获取到context")
         }
         this.gl = context
+        const floatExt = this.gl.getExtension("EXT_color_buffer_float")
+        if (!floatExt) {
+            console.warn('[Renderer] EXT_color_buffer_float 不可用，将回退 LDR')
+        }
         this.startTime = performance.now()
         this.emptyVBO = this.gl.createVertexArray()
-        this.renderTarget = new RenderTarget(this.gl, this.gl.drawingBufferWidth, this.gl.drawingBufferHeight)
+        this.renderTarget = new RenderTarget(this.gl, this.gl.drawingBufferWidth, this.gl.drawingBufferHeight, 'rgba16f')
         this.postProcessMaterial = new PostProcessMaterial({})
         this.postProcessMaterial.effect = "none"
         this.postProcessMaterial.initShader(this.gl)
@@ -51,8 +55,8 @@ export class Renderer {
 
         const hw = Math.floor(this.gl.drawingBufferWidth / 2)
         const hh = Math.floor(this.gl.drawingBufferHeight / 2)
-        this.pingRT = new RenderTarget(this.gl, hw, hh)
-        this.pongRT = new RenderTarget(this.gl, hw, hh)
+        this.pingRT = new RenderTarget(this.gl, hw, hh, 'rgba16f')
+        this.pongRT = new RenderTarget(this.gl, hw, hh, 'rgba16f')
     }
     render(list: Object3D[], camera: Camera) {
         this.time = performance.now() - this.startTime
@@ -66,7 +70,7 @@ export class Renderer {
 
         this.renderTarget.unbind(this.gl)
 
-        this.runBloom(1)
+        this.runBloom(2)
         this.composite()
 
     }
@@ -110,7 +114,8 @@ export class Renderer {
         // 亮度提取
         pm.uniforms.uTime = this.time / 1000           // 秒
         pm.uniforms.uResolution = [this.gl.drawingBufferWidth / 2, this.gl.drawingBufferHeight / 2]
-        pm.effect = "bright"
+        pm.effect = "hdrOver"
+        pm.uniforms.uEffect = EFFECT_MAP[pm.effect]
         pm.uniforms.uResolution = [pingRt.width, pingRt.width]
         this.runPass({
             material: pm,

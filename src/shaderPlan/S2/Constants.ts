@@ -15,4 +15,6 @@ export const EFFECT_MAP: Record<PostEffectType, number> = {
     "bright": 10,
     'blurH': 11,
     "blurV": 12,
+    "hdrScale": 13,
+    "hdrOver": 14
 }

@@ -437,9 +437,9 @@ export class MeshPhongMaterial extends Material {
                 totalSpecular+=lightColor*uMaterial.specular*specular*attenuation*intensity;
             }
             col=col+totalSpecular+totalDiffuse;
-            col = col / (col + vec3(1.0));
-            fragColor=vec4(linearToSrgb(col),1.);
-            // fragColor=tex;
+            // col = col / (col + vec3(1.0));
+            // fragColor=vec4(linearToSrgb(col),1.);
+            fragColor=vec4(col,1.);
 
         }
     
@@ -484,6 +484,9 @@ export type PostEffectType =
     | 'bright'       // 提取亮部
     | 'blurH'        // 水平高斯模糊
     | "blurV"        // 垂直高斯模糊
+    //hdr debug 效果
+    | 'hdrScale'    // 值除以 4
+    | 'hdrOver'     // 超 1 标红
 export class PostProcessMaterial extends Material {
     vertexString = `#version 300 es
         out vec2 vUv;
@@ -657,7 +660,19 @@ vec3 blurV(vec2 uv,vec2 texelSize,float radius){
     
     return totalCol/weight;
 }
+// 1) 除以 4 观察：如果 RT 是 RGBA8，全部 ≤ 0.25，画面灰暗
+//    如果是 RGBA16F，高光区 > 1，除以 4 后仍能看到亮斑
+vec3 hdrScale(vec2 uv) {
+    vec3 c = texture(uSceneTexture, uv).rgb;
+    return c / 4.0;
+}
 
+// 2) 超 1 标红：一眼看出哪些像素超出了 LDR 范围
+vec3 hdrOver(vec2 uv) {
+    vec3 c = texture(uSceneTexture, uv).rgb;
+    float m = max(max(c.r, c.g), c.b);
+    return m > 1. ? vec3(1.0, 0.0, 0.0) : c;
+}
 void main() {
     vec3 col;
     vec2 texelSize=1./uResolution;
@@ -693,10 +708,12 @@ void main() {
         col=sobel(vUv,texelSize);
     }else if(uEffect ==10){
         col=extractLight(vUv);
-    }else if(uEffect ==11){
-        col=blurH(vUv,texelSize,8.);
-    }else if(uEffect ==12){
-        col=blurV(vUv,texelSize,8.);
+    }else if(uEffect ==13){
+        col=hdrScale(vUv);
+    }else if(uEffect ==14){
+        col=hdrOver(vUv);
+    }else{
+        col=texture(uSceneTexture,vUv).rgb;
     }
 
     fragColor = vec4(col, 1.0);
