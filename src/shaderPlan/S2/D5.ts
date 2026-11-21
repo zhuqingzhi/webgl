@@ -66,7 +66,7 @@ export class Geometry {
         offset?: number,
         type?: WebGLRenderingContextBase['FLOAT'] | WebGLRenderingContextBase["SHORT"]
     }) {
-        if (index < 0) throw new Error(attribParams.name + "未获取到")
+        if (index < 0) return console.log(attribParams.name + "未获取到")
         const { data, size, offset = 0, type = gl.FLOAT } = attribParams
         let by = 0
         if (type === gl.FLOAT) by = 4

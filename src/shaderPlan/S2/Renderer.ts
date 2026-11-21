@@ -70,7 +70,7 @@ export class Renderer {
 
         this.renderTarget.unbind(this.gl)
 
-        this.runBloom(2)
+        this.runBloom(3)
         this.composite()
 
     }
@@ -113,10 +113,9 @@ export class Renderer {
         const pongRt = this.pongRT
         // 亮度提取
         pm.uniforms.uTime = this.time / 1000           // 秒
-        pm.uniforms.uResolution = [this.gl.drawingBufferWidth / 2, this.gl.drawingBufferHeight / 2]
-        pm.effect = "hdrOver"
+        pm.effect = "bright"
         pm.uniforms.uEffect = EFFECT_MAP[pm.effect]
-        pm.uniforms.uResolution = [pingRt.width, pingRt.width]
+        pm.uniforms.uResolution = [pingRt.width, pingRt.height]
         this.runPass({
             material: pm,
             target: pingRt,
@@ -161,7 +160,7 @@ export class Renderer {
             });
             [src, dst] = [dst, src];
         }
-        this.bloomTex = dst.colorTex
+        this.bloomTex = src.colorTex
     }
 
     private composite() {

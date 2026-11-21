@@ -5,6 +5,7 @@ import { MAX_LIGHTS } from "./Constants"
 
 type MaterialParamsType = {
     color?: vec3
+    procedural?: ProceduralType
 }
 export class Material {
     vertexShader!: WebGLShader
@@ -141,22 +142,45 @@ export class MeshBasicMaterial extends Material {
         uniform mat4 modelMatrix;
         uniform mat4 viewMatrix;
         uniform mat4 projectionMatrix;
+        in vec2 aUv;
+        out vec2 vUv;
         void main(){
             gl_Position=projectionMatrix*viewMatrix*modelMatrix*vec4(aPosition,1.);
+            vUv=aUv;
         }
     `
     fragmentString = `#version 300 es
         precision mediump float;
         uniform vec3 uColor;
         out vec4 fragColor;
+        in vec2 vUv;
+        uniform int uProcedural;
+        float checker(vec2 uv, float n) {
+            vec2 p = uv * n;
+            vec2 w = fwidth(p);                       // 屏幕空间导数，一个像素跨多少格子
+            vec2 i = 2.0 * (abs(fract((p - 0.5 * w) * 0.5) - 0.5)
+                        - abs(fract((p + 0.5 * w) * 0.5) - 0.5)) / w;
+            return 0.5 - 0.5 * i.x * i.y;
+        }
+        vec3 computeAlbedo() {
+            if (uProcedural == 1) return vec3(checker(vUv, 8.0));
+            return uColor;
+        }
         void main(){
-            fragColor=vec4(uColor,1.);
+            vec3 albedo = computeAlbedo();
+            fragColor=vec4(uColor*albedo,1.);
         }
     
     `
-
+    procedural?: ProceduralType
     constructor(params: MaterialParamsType) {
         super(params)
+        this.procedural = params.procedural
+    }
+    syncUniforms(): void {
+        super.syncUniforms()
+        const PROC_MAP = { none: 0, checker: 1, wood: 2, marble: 3, cloud: 4 }
+        this.uniforms.uProcedural = PROC_MAP[this.procedural ?? 'none']
     }
 
 }
@@ -631,9 +655,7 @@ vec3 sobel(vec2 uv,vec2 texelSize){
 vec3 extractLight(vec2 uv){
     vec3 col=texture(uSceneTexture,uv).rgb;
     float lum=dot(col,vec3(.299,.587,.114));
-    // float m=step(uLightIntensity,lum);
-    float knee=0.15;
-    float m = max(lum - uLightIntensity, 0.0) / max(lum, 1e-4);
+    float m=step(uLightIntensity,lum);
     return col*m;
 }
 // 9_tap水平模糊
@@ -708,6 +730,10 @@ void main() {
         col=sobel(vUv,texelSize);
     }else if(uEffect ==10){
         col=extractLight(vUv);
+    }else if(uEffect == 11){
+    col = blurH(vUv, texelSize, 1.5);
+    }else if(uEffect == 12){
+        col = blurV(vUv, texelSize, 1.5);
     }else if(uEffect ==13){
         col=hdrScale(vUv);
     }else if(uEffect ==14){
@@ -750,8 +776,9 @@ export class CompositeMaterial extends Material {
         void main(){
             vec3 scene = texture(uSceneTexture, vUv).rgb;
             vec3 bloom = texture(uBloomTexture, vUv).rgb;
-            vec3 col = scene*0.01+bloom * uIntensity;
+            vec3 col =scene+ bloom * uIntensity;
             col = col / (col + vec3(1.0));   // Reinhard
+            col = pow(col, vec3(1.0 / 2.2)); 
             fragColor = vec4(col, 1.0);
         }
     `

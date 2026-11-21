@@ -1,6 +1,6 @@
 import { Geometry, Mesh, Object3D, PerspectiveCamera, } from "./shaderPlan/S2/D5"
 import { createCheckerCanvas, createNormalMapCanvas, createPlane, createSphere } from "./shaderPlan/S2/utils"
-import { MeshPhongMaterial, type PostEffectType } from "./shaderPlan/S2/Materials"
+import { MeshBasicMaterial, MeshPhongMaterial, type PostEffectType } from "./shaderPlan/S2/Materials"
 import { TextureLoader } from "./shaderPlan/S2/Loader";
 import { Texture } from "./shaderPlan/S2/Textures";
 import { Renderer } from "./shaderPlan/S2/Renderer";
@@ -88,11 +88,9 @@ const planeMap = new Texture({
 })
 renderer.gl.framebufferTexture2D
 planeMap.ready = true
-const planeMat = new MeshPhongMaterial({
-  color: [10, 10, 10],
-  specular: [0.5, 0.5, 0.5],
-  shininess: 32,
-  map: planeMap,
+const planeMat = new MeshBasicMaterial({
+  color: [1, 1, 1],
+  procedural: "checker"
 })
 const plane = new Mesh(planeGeo, planeMat)
 plane.position = [0, 0, 1]
@@ -121,10 +119,10 @@ const obj = {
   uLightIntensity: 0.3,
   uIntensity: 0.8
 }
-gui.add(obj, 'uLightIntensity', 0, 1, 0.1).name("提取光强度").onChange(val => {
+gui.add(obj, 'uLightIntensity', 0, 10, 0.01).name("提取光强度").onChange(val => {
   renderer.postProcessMaterial.uniforms.uLightIntensity = val
 })
-gui.add(obj, 'uIntensity', 0, 300, 0.1).name("辉光强度").onChange(val => {
+gui.add(obj, 'uIntensity', 0, 1, 0.1).name("辉光强度").onChange(val => {
   renderer.compositeMaterial.uniforms.uIntensity = val
 })
 
