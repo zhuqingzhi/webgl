@@ -89,7 +89,7 @@ const planeMap = new Texture({
 renderer.gl.framebufferTexture2D
 planeMap.ready = true
 const planeMat = new MeshPhongMaterial({
-  color: [1, 1, 1],
+  color: [10, 10, 10],
   specular: [0.5, 0.5, 0.5],
   shininess: 32,
   map: planeMap,
@@ -124,7 +124,7 @@ const obj = {
 gui.add(obj, 'uLightIntensity', 0, 1, 0.1).name("提取光强度").onChange(val => {
   renderer.postProcessMaterial.uniforms.uLightIntensity = val
 })
-gui.add(obj, 'uIntensity', 0, 10, 0.1).name("辉光强度").onChange(val => {
+gui.add(obj, 'uIntensity', 0, 300, 0.1).name("辉光强度").onChange(val => {
   renderer.compositeMaterial.uniforms.uIntensity = val
 })
 

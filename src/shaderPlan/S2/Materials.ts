@@ -750,7 +750,7 @@ export class CompositeMaterial extends Material {
         void main(){
             vec3 scene = texture(uSceneTexture, vUv).rgb;
             vec3 bloom = texture(uBloomTexture, vUv).rgb;
-            vec3 col = scene + bloom * uIntensity;
+            vec3 col = scene*0.01+bloom * uIntensity;
             col = col / (col + vec3(1.0));   // Reinhard
             fragColor = vec4(col, 1.0);
         }
