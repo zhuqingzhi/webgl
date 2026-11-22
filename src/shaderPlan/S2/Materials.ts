@@ -72,7 +72,7 @@ export class Material {
             const value = this.uniforms[name]
             if (value === undefined || value < 0) {
                 if (!this.warnedUniforms.has(name)) {
-                    console.warn(`[uniform] shader 声明了 "${name}"，但 uniforms 里没有对应值`)
+                    console.warn(`[uniform] shader 声明了 "${name}"，但 uniforms 里值:` + value)
                     this.warnedUniforms.add(name)
                 }
                 continue

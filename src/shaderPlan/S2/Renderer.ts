@@ -337,6 +337,7 @@ export class Renderer {
         if (mat.map) {
             mat.map.init(this.gl, unit)
             mat.map.bind(this.gl, unit)
+            mat.uniforms['uTexture'] = unit
             unit++
         } else {
             mat.uniforms['uTexture'] = 0          // 兜底，避免 sampler 未绑定
@@ -344,6 +345,7 @@ export class Renderer {
         if (mat.normalMap) {
             mat.normalMap.init(this.gl, unit)
             mat.normalMap.bind(this.gl, unit)
+            mat.uniforms['uNormalMap'] = unit
             unit++
         } else {
             mat.uniforms['uNormalMap'] = 0        // 兜底指向 uTexture 所在单元
