@@ -773,18 +773,54 @@ export class CompositeMaterial extends Material {
         uniform float uIntensity;
         in vec2 vUv;
         out vec4 fragColor;
+        uniform float uExposure;
+        uniform int uToneMap;
+
+        // ── 1) Reinhard：最简单，[0,∞) → [0,1) ──
+        vec3 reinhard(vec3 c) {
+            return c / (c + vec3(1.0));
+        }
+
+        // ── 2) Filmic（Uncharted 2）：S 曲线，暗部提升、高光柔和 ──
+        vec3 uncharted2(vec3 x) {
+            const float A = 0.15, B = 0.50, C = 0.10, D = 0.20, E = 0.02, F = 0.30;
+            return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
+        }
+        vec3 filmic(vec3 c) {
+            const float W = 11.2;
+            vec3 curr = uncharted2(2.0 * c);          // 2.0 是曝光偏置
+            vec3 whiteScale = 1.0 / uncharted2(vec3(W));
+            return clamp(curr * whiteScale, 0.0, 1.0);
+        }
+
+        // ── 3) ACES（Narkowicz 2015 近似）：工业标准，颜色保持好 ──
+        vec3 aces(vec3 x) {
+            const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+            return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+        }
         void main(){
             vec3 scene = texture(uSceneTexture, vUv).rgb;
             vec3 bloom = texture(uBloomTexture, vUv).rgb;
-            vec3 col =scene+ bloom * uIntensity;
-            col = col / (col + vec3(1.0));   // Reinhard
-            col = pow(col, vec3(1.0 / 2.2)); 
-            fragColor = vec4(col, 1.0);
+            vec3 hdr =(scene+ bloom * uIntensity)*pow(2.,uExposure);
+            vec3 ldr=vec3(0);
+            if(uToneMap==0){
+                ldr=reinhard(hdr);
+            }else if(uToneMap==1){
+                ldr=filmic(hdr);
+            }else if(uToneMap==2){
+                ldr=aces(hdr);
+            }else{
+                ldr=vec3(1,0,0);
+            }
+            ldr = pow(ldr, vec3(1.0 / 2.2)); 
+            fragColor = vec4(ldr, 1.0);
         }
     `
     uniforms: Record<string, any> = {
         uSceneTexture: 0,
         uBloomTexture: 1,
-        uIntensity: 0.8
+        uIntensity: 0.8,
+        uToneMap: 0,
+        uExposure: 1
     }
 }

@@ -88,9 +88,12 @@ const planeMap = new Texture({
 })
 renderer.gl.framebufferTexture2D
 planeMap.ready = true
-const planeMat = new MeshBasicMaterial({
+/* const planeMat = new MeshBasicMaterial({
   color: [1, 1, 1],
   procedural: "checker"
+}) */
+const planeMat = new MeshPhongMaterial({
+  map: texture
 })
 const plane = new Mesh(planeGeo, planeMat)
 plane.position = [0, 0, 1]
@@ -117,7 +120,9 @@ const gui = new GUI({
 })
 const obj = {
   uLightIntensity: 0.3,
-  uIntensity: 0.8
+  uIntensity: 0.8,
+  uToneMap: 0,
+  uExposure: 1
 }
 gui.add(obj, 'uLightIntensity', 0, 10, 0.01).name("提取光强度").onChange(val => {
   renderer.postProcessMaterial.uniforms.uLightIntensity = val
@@ -125,7 +130,12 @@ gui.add(obj, 'uLightIntensity', 0, 10, 0.01).name("提取光强度").onChange(va
 gui.add(obj, 'uIntensity', 0, 1, 0.1).name("辉光强度").onChange(val => {
   renderer.compositeMaterial.uniforms.uIntensity = val
 })
-
+gui.add(obj, "uToneMap", [0, 1, 2]).name("色调映射").onChange(val => {
+  renderer.compositeMaterial.uniforms.uToneMap = val
+})
+gui.add(obj, "uExposure", 0, 10, 0.1).name("曝光度").onChange(val => {
+  renderer.compositeMaterial.uniforms.uExposure = val
+})
 
 function render() {
   const t = performance.now() * 0.001
