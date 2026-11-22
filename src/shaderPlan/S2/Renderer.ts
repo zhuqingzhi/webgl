@@ -15,6 +15,19 @@ type PassInputs = {
     unit: number
 }
 
+/* 
+颜色管线
+纹理采样：srgb8_alpha8->硬件解码->linear
+材质颜色：colorToLinear()->linear
+光照计算：linear
+写入renderTarget:rgba16F，值可超过1.
+亮部提取：阈值在Linear，1.0纯白
+高斯模糊：linear空间，不能clamp
+色调映射：Linear->[0,1]
+srgb编码：伽马校正，pow(col,1/2.2)
+输出到屏幕：srgb 8位
+*/
+
 // 渲染循环，切换program，遍历material的uniforms上传数据，脏标记
 export class Renderer {
     shaderMap: Set<WebGLShader> = new Set()

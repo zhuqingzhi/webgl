@@ -1,5 +1,5 @@
 import { Geometry, Mesh, Object3D, PerspectiveCamera, } from "./shaderPlan/S2/D5"
-import { createCheckerCanvas, createNormalMapCanvas, createPlane, createSphere } from "./shaderPlan/S2/utils"
+import { createCheckerCanvas, createNormalMapCanvas, createPlane, createSphere, createWhiteCanvas } from "./shaderPlan/S2/utils"
 import { MeshBasicMaterial, MeshPhongMaterial, type PostEffectType } from "./shaderPlan/S2/Materials"
 import { TextureLoader } from "./shaderPlan/S2/Loader";
 import { Texture } from "./shaderPlan/S2/Textures";
@@ -74,8 +74,11 @@ sphere2.position = [0, 0, 0]
 
 const planeParam = createPlane(1, 1, 10, 10)
 const planeGeo = new Geometry(planeParam)
+
+const whiteCanvas = createWhiteCanvas(512)
+
 const planeMap = new Texture({
-  image,
+  image: whiteCanvas,
   wrapS: renderer.gl.REPEAT,
   wrapT: renderer.gl.REPEAT,
   /* wrapS: renderer.gl.MIRRORED_REPEAT,
@@ -86,15 +89,14 @@ const planeMap = new Texture({
   // minFilter: renderer.gl.NEAREST,
 
 })
-renderer.gl.framebufferTexture2D
 planeMap.ready = true
-/* const planeMat = new MeshBasicMaterial({
-  color: [1, 1, 1],
-  procedural: "checker"
-}) */
-const planeMat = new MeshPhongMaterial({
-  map: texture
+planeMap.colorSpace = 'linear'
+const planeMat = new MeshBasicMaterial({
+  color: [0.5, 0.5, 0.5]
 })
+/* const planeMat = new MeshPhongMaterial({
+  map: planeMap
+}) */
 const plane = new Mesh(planeGeo, planeMat)
 plane.position = [0, 0, 1]
 plane.scale = [10, 10, 10]
@@ -130,7 +132,7 @@ gui.add(obj, 'uLightIntensity', 0, 10, 0.01).name("提取光强度").onChange(va
 gui.add(obj, 'uIntensity', 0, 1, 0.1).name("辉光强度").onChange(val => {
   renderer.compositeMaterial.uniforms.uIntensity = val
 })
-gui.add(obj, "uToneMap", [0, 1, 2]).name("色调映射").onChange(val => {
+gui.add(obj, "uToneMap", [0, 1, 2, 3]).name("色调映射").onChange(val => {
   renderer.compositeMaterial.uniforms.uToneMap = val
 })
 gui.add(obj, "uExposure", 0, 10, 0.1).name("曝光度").onChange(val => {

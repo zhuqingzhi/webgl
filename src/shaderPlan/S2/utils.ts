@@ -81,10 +81,11 @@ export function createCheckerCanvas(size = 512, cells = 8): HTMLCanvasElement {
     }
     return c
 }
-export function createWhiteCanvas(size = 512, cells = 8): HTMLCanvasElement {
+export function createWhiteCanvas(size = 512, color = "#808080"): HTMLCanvasElement {
     const c = document.createElement('canvas')
     c.width = c.height = size
     const ctx = c.getContext('2d')!
+    ctx.fillStyle = color
     ctx.fillRect(0, 0, size, size)
     return c
 }

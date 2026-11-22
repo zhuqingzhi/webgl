@@ -164,7 +164,7 @@ export class MeshBasicMaterial extends Material {
         }
         vec3 computeAlbedo() {
             if (uProcedural == 1) return vec3(checker(vUv, 8.0));
-            return uColor;
+            return vec3(1);
         }
         void main(){
             vec3 albedo = computeAlbedo();
@@ -802,15 +802,13 @@ export class CompositeMaterial extends Material {
             vec3 scene = texture(uSceneTexture, vUv).rgb;
             vec3 bloom = texture(uBloomTexture, vUv).rgb;
             vec3 hdr =(scene+ bloom * uIntensity)*pow(2.,uExposure);
-            vec3 ldr=vec3(0);
+            vec3 ldr=hdr;
             if(uToneMap==0){
-                ldr=reinhard(hdr);
+                ldr=reinhard(ldr);
             }else if(uToneMap==1){
-                ldr=filmic(hdr);
+                ldr=filmic(ldr);
             }else if(uToneMap==2){
-                ldr=aces(hdr);
-            }else{
-                ldr=vec3(1,0,0);
+                ldr=aces(ldr);
             }
             ldr = pow(ldr, vec3(1.0 / 2.2)); 
             fragColor = vec4(ldr, 1.0);

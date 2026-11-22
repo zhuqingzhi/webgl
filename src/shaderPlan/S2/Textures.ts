@@ -22,11 +22,11 @@ export class Texture {
     ready: boolean = false
     private texture: WebGLTexture | null = null
     needUpdate: boolean = true
-    colorSpace?: TextureParamsType['colorSpace'] = "linear"
+    colorSpace?: TextureParamsType['colorSpace'] = "srgb"
     constructor(params: TextureParamsType) {
         const { wrapS = defaultTextureParameter.wrapS, wrapT = defaultTextureParameter.wrapT,
             minFilter = defaultTextureParameter.minFilter, magFilter = defaultTextureParameter.magFilter,
-            colorSpace = 'linear'
+            colorSpace = 'srgb'
         } = params
         this.image = params.image
         this.wrapS = wrapS
