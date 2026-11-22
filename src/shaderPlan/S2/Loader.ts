@@ -7,7 +7,8 @@ export class TextureLoader extends Loader {
     load(url: string): Texture {
         const img = new Image()
         const texture = new Texture({
-            image: img
+            image: img,
+            colorSpace: "srgb"
         })
         img.onload = e => {
             texture.ready = true

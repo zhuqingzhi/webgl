@@ -87,16 +87,16 @@ const planeMap = new Texture({
   minFilter: renderer.gl.NEAREST, */
   minFilter: renderer.gl.LINEAR_MIPMAP_LINEAR,
   // minFilter: renderer.gl.NEAREST,
+  colorSpace: "linear"
 
 })
 planeMap.ready = true
-planeMap.colorSpace = 'linear'
-const planeMat = new MeshBasicMaterial({
+/* const planeMat = new MeshBasicMaterial({
   color: [0.5, 0.5, 0.5]
-})
-/* const planeMat = new MeshPhongMaterial({
-  map: planeMap
 }) */
+const planeMat = new MeshPhongMaterial({
+  map: texture
+})
 const plane = new Mesh(planeGeo, planeMat)
 plane.position = [0, 0, 1]
 plane.scale = [10, 10, 10]

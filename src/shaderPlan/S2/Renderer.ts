@@ -24,7 +24,7 @@ type PassInputs = {
 亮部提取：阈值在Linear，1.0纯白
 高斯模糊：linear空间，不能clamp
 色调映射：Linear->[0,1]
-srgb编码：伽马校正，pow(col,1/2.2)
+srgb编码：伽马校正，linearToSrgb
 输出到屏幕：srgb 8位
 */
 
@@ -338,11 +338,15 @@ export class Renderer {
             mat.map.init(this.gl, unit)
             mat.map.bind(this.gl, unit)
             unit++
+        } else {
+            mat.uniforms['uTexture'] = 0          // 兜底，避免 sampler 未绑定
         }
         if (mat.normalMap) {
             mat.normalMap.init(this.gl, unit)
             mat.normalMap.bind(this.gl, unit)
             unit++
+        } else {
+            mat.uniforms['uNormalMap'] = 0        // 兜底指向 uTexture 所在单元
         }
     }
     renderMesh(mesh: Mesh) {

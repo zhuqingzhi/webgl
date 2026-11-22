@@ -5,7 +5,7 @@ type TextureParamsType = {
     wrapT?: number,
     minFilter?: number,
     magFilter?: number,
-    colorSpace?: "srgb" | 'linear'
+    colorSpace: "srgb" | 'linear'
 }
 const defaultTextureParameter = {
     wrapS: WebGLRenderingContext["CLAMP_TO_EDGE"],
@@ -22,11 +22,11 @@ export class Texture {
     ready: boolean = false
     private texture: WebGLTexture | null = null
     needUpdate: boolean = true
-    colorSpace?: TextureParamsType['colorSpace'] = "srgb"
+    colorSpace: TextureParamsType['colorSpace']
     constructor(params: TextureParamsType) {
         const { wrapS = defaultTextureParameter.wrapS, wrapT = defaultTextureParameter.wrapT,
             minFilter = defaultTextureParameter.minFilter, magFilter = defaultTextureParameter.magFilter,
-            colorSpace = 'srgb'
+            colorSpace
         } = params
         this.image = params.image
         this.wrapS = wrapS
