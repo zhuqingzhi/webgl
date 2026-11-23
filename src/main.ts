@@ -147,7 +147,7 @@ gui.add(obj, "bloomType", [0, 1]).name("辉光类型").onChange((val) => {
   renderer.bloomType = val as any
 })
 
-gui.add(obj, 'uThreshold', 0, 5, 0.01).name("辉光阈值").onChange(val => {
+gui.add(obj, 'uThreshold', 0, 30, 0.01).name("辉光阈值").onChange(val => {
   renderer.postProcessMaterial.uniforms.uThreshold = val
 })
 gui.add(obj, 'uSoftKnee', 0, 1, 0.01).name("软膝").onChange(val => {

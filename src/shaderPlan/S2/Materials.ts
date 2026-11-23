@@ -597,7 +597,6 @@ vec3 blur3(vec2 uv,vec2 texelSize){
 vec3 blurGauss(vec2 uv,vec2 texelSize,float radius){
     vec3 totalCol=vec3(0.);
     float totalHeavy=0.;
-    float uSigma=1.5;
     for(int i=-2;i<=2;i++){
         for(int j=-2;j<=2;j++){
             vec2 offset=vec2(i,j);
@@ -682,7 +681,6 @@ vec3 extractLight(vec2 uv){
 vec3 blurH(vec2 uv,vec2 texelSize,float radius){
     vec3 totalCol=vec3(0);
     float weight=0.;
-    float uSigma=1.5;
     for(int i=-4;i<=4;i++){
         float w=exp(-float(i)*float(i)/(2.*uSigma*uSigma));
         totalCol+=texture(uSceneTexture,uv+vec2(float(i)*radius,0)*texelSize).rgb*w;
@@ -693,7 +691,6 @@ vec3 blurH(vec2 uv,vec2 texelSize,float radius){
 vec3 blurV(vec2 uv,vec2 texelSize,float radius){
     vec3 totalCol=vec3(0.);
     float weight=0.;
-    float uSigma=5.;
     for(int i=-4;i<=4;i++){
         float w=exp(-float(i)*float(i)/(2.*uSigma*uSigma));
         totalCol+=texture(uSceneTexture,uv+vec2(0.,float(i)*radius)*texelSize).rgb*w;
