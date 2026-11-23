@@ -97,7 +97,8 @@ planeMap.ready = true
 const planeMat = new MeshPhongMaterial({
   map: texture
 })
-const plane = new Mesh(planeGeo, planeMat)
+const glowMat = new MeshBasicMaterial({ color: [5, 4, 3] })
+const plane = new Mesh(planeGeo, glowMat)
 plane.position = [0, 0, 1]
 plane.scale = [10, 10, 10]
 plane.rotation[0] = -Math.PI / 2
@@ -124,11 +125,15 @@ const obj = {
   uLightIntensity: 0.3,
   uIntensity: 0.8,
   uToneMap: 0,
-  uExposure: 1
+  uExposure: 1,
+  bloomType: 0,
+  uThreshold: 1.0,
+  uSoftKnee: 0.5,
+  uSigma: 1.5,
 }
-gui.add(obj, 'uLightIntensity', 0, 10, 0.01).name("提取光强度").onChange(val => {
+/* gui.add(obj, 'uLightIntensity', 0, 10, 0.01).name("提取光强度").onChange(val => {
   renderer.postProcessMaterial.uniforms.uLightIntensity = val
-})
+}) */
 gui.add(obj, 'uIntensity', 0, 1, 0.1).name("辉光强度").onChange(val => {
   renderer.compositeMaterial.uniforms.uIntensity = val
 })
@@ -137,6 +142,19 @@ gui.add(obj, "uToneMap", [0, 1, 2, 3]).name("色调映射").onChange(val => {
 })
 gui.add(obj, "uExposure", 0, 10, 0.1).name("曝光度").onChange(val => {
   renderer.compositeMaterial.uniforms.uExposure = val
+})
+gui.add(obj, "bloomType", [0, 1]).name("辉光类型").onChange((val) => {
+  renderer.bloomType = val as any
+})
+
+gui.add(obj, 'uThreshold', 0, 5, 0.01).name("辉光阈值").onChange(val => {
+  renderer.postProcessMaterial.uniforms.uThreshold = val
+})
+gui.add(obj, 'uSoftKnee', 0, 1, 0.01).name("软膝").onChange(val => {
+  renderer.postProcessMaterial.uniforms.uSoftKnee = val
+})
+gui.add(obj, 'uSigma', 0.5, 3, 0.01).name("模糊sigma").onChange(val => {
+  renderer.postProcessMaterial.uniforms.uSigma = val
 })
 
 function render() {

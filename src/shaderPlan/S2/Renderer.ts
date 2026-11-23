@@ -44,6 +44,13 @@ export class Renderer {
     pingRT: RenderTarget
     pongRT: RenderTarget
     private bloomTex!: WebGLTexture
+
+    mip1A: RenderTarget
+    mip1B: RenderTarget
+    mip2A: RenderTarget
+    mip2B: RenderTarget
+
+    bloomType: 0 | 1 = 0
     constructor(params: RendererParamType) {
         if (!params.el) {
             params.el = document.createElement("canvas")
@@ -70,6 +77,12 @@ export class Renderer {
         const hh = Math.floor(this.gl.drawingBufferHeight / 2)
         this.pingRT = new RenderTarget(this.gl, hw, hh, 'rgba16f')
         this.pongRT = new RenderTarget(this.gl, hw, hh, 'rgba16f')
+
+        this.mip1A = new RenderTarget(this.gl, hw / 2, hh / 2, 'rgba16f')
+        this.mip1B = new RenderTarget(this.gl, hw / 2, hh / 2, 'rgba16f')
+
+        this.mip2A = new RenderTarget(this.gl, hw / 4, hh / 4, 'rgba16f')
+        this.mip2B = new RenderTarget(this.gl, hw / 4, hh / 4, 'rgba16f')
     }
     render(list: Object3D[], camera: Camera) {
         this.time = performance.now() - this.startTime
@@ -83,16 +96,20 @@ export class Renderer {
 
         this.renderTarget.unbind(this.gl)
 
-        this.runBloom(3)
+        if (this.bloomType == 0)
+            this.runBloom(3)
+        else
+            this.runBloomDownSample()
         this.composite()
 
     }
     private runPass(opt: {
         target: RenderTarget | null,
         material: Material,
-        inputs: PassInputs[]
+        inputs: PassInputs[],
+        clear?: boolean
     }) {
-        const { target, material, inputs } = opt
+        const { target, material, inputs, clear = true } = opt
         if (target) {
             target.bind(this.gl)
         } else {
@@ -102,7 +119,7 @@ export class Renderer {
         this.gl.disable(this.gl.DEPTH_TEST)
         this.gl.clearColor(0, 0, 0, 1)
         this.gl.disable(this.gl.CULL_FACE)
-        this.gl.clear(this.gl.COLOR_BUFFER_BIT)
+        if (clear) this.gl.clear(this.gl.COLOR_BUFFER_BIT)
         this.gl.useProgram(material.program)
         this.gl.bindVertexArray(this.emptyVBO)
         for (let i = 0; i < inputs.length; i++) {
@@ -129,6 +146,8 @@ export class Renderer {
         pm.effect = "bright"
         pm.uniforms.uEffect = EFFECT_MAP[pm.effect]
         pm.uniforms.uResolution = [pingRt.width, pingRt.height]
+
+        // 提取亮部
         this.runPass({
             material: pm,
             target: pingRt,
@@ -173,7 +192,119 @@ export class Renderer {
             });
             [src, dst] = [dst, src];
         }
+
         this.bloomTex = src.colorTex
+
+
+
+    }
+    private runBloomDownSample() {
+        const pm = this.postProcessMaterial
+        const pingRt = this.pingRT
+        const pongRt = this.pongRT
+        // 亮度提取
+        pm.uniforms.uTime = this.time / 1000           // 秒
+        pm.effect = "bright"
+        pm.uniforms.uEffect = EFFECT_MAP[pm.effect]
+        pm.uniforms.uResolution = [pingRt.width, pingRt.height]
+
+        // 提取亮部
+        this.runPass({
+            material: pm,
+            target: pingRt,
+            inputs: [
+                {
+                    tex: this.renderTarget.colorTex,
+                    unit: 0
+                }
+            ]
+        })
+
+        // pingRT->blurH->pongRT->blurV->pingRT :第一级模糊
+        this.runBlur(pingRt, pongRt)
+        // pingRT->降采样->mip1A
+        this.downsample(pingRt, this.mip1A, pm)
+        // mip1A->blurH->mip1B->blurV->mip1A :第二级
+        this.runBlur(this.mip1A, this.mip1B)
+        // mip1A->降采样mip2A
+        this.downsample(this.mip1A, this.mip2A, pm)
+        // mip2A->blurH->mip2B->blurV->mipA:第三级
+        this.runBlur(this.mip2A, this.mip2B)
+        // 开启混合，渲染小的mip到大的mip上
+        pm.effect = "none"
+        pm.uniforms.uEffect = EFFECT_MAP[pm.effect]
+        this.gl.enable(this.gl.BLEND)
+        this.gl.blendFunc(this.gl.ONE, this.gl.ONE)
+
+        // mip2A->mip1A
+        this.runPass({
+            target: this.mip1A,
+            material: pm,
+            inputs: [
+                {
+                    unit: 0,
+                    tex: this.mip2A.colorTex
+                }
+            ]
+        })
+        // mip1A->pingRT
+        this.runPass({
+            target: pingRt,
+            material: pm,
+            inputs: [
+                {
+                    unit: 0,
+                    tex: this.mip1A.colorTex
+                }
+            ]
+        })
+        // bloomTex=pingRT.colorTex
+        this.bloomTex = pingRt.colorTex
+    }
+    private downsample(src: RenderTarget, dst: RenderTarget, mat: PostProcessMaterial) {
+        dst.bind(this.gl)
+        mat.effect = "none"
+        mat.uniforms.uEffect = EFFECT_MAP[mat.effect]
+        this.gl.clear(this.gl.COLOR_BUFFER_BIT)
+        mat.uploadUniforms(this.gl)
+        this.gl.activeTexture(this.gl.TEXTURE0)
+        this.gl.bindTexture(this.gl.TEXTURE_2D, src.colorTex)
+        this.gl.bindVertexArray(this.emptyVBO)
+        this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4)
+        this.gl.bindVertexArray(null)
+
+        this.gl.activeTexture(this.gl.TEXTURE0)
+        this.gl.bindTexture(this.gl.TEXTURE_2D, null)
+    }
+    private runBlur(src: RenderTarget, dst: RenderTarget) {
+        const pm = this.postProcessMaterial
+        pm.effect = "blurH"
+        pm.uniforms.uEffect = EFFECT_MAP[pm.effect]
+        pm.uniforms.uResolution = [dst.width, dst.height]
+        this.runPass({
+            target: dst,
+            material: pm,
+            inputs: [
+                {
+                    tex: src.colorTex,
+                    unit: 0
+                }
+            ]
+        });
+        [dst, src] = [src, dst]
+        pm.effect = 'blurV'
+        pm.uniforms.uEffect = EFFECT_MAP[pm.effect]
+        pm.uniforms.uResolution = [dst.width, dst.height]
+        this.runPass({
+            target: dst,
+            material: pm,
+            inputs: [
+                {
+                    tex: src.colorTex,
+                    unit: 0
+                }
+            ]
+        });
     }
 
     private composite() {

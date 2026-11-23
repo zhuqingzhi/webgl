@@ -669,12 +669,12 @@ vec3 sobel(vec2 uv,vec2 texelSize){
 } */
 
 // 软阈值提取
-vec3 extractLightSoft(vec2 uv){
+vec3 extractLight(vec2 uv){
     vec3 c=texture(uSceneTexture,uv).rgb;
     float lum=dot(c,vec3(0.2126,0.7152,0.0722));//rec.709亮度系数
     float knee=uThreshold*uSoftKnee;
     float soft=clamp(lum-uThreshold+knee,0.0,2.*knee);
-    soft=soft*soft/(4*soft+1e-4);
+    soft=soft*soft/(4.*soft+1e-4);
     float contrib=max(soft,lum-uThreshold)/max(lum,1e-4);
     return c*contrib;
 }
@@ -772,7 +772,10 @@ void main() {
         uResolution: [1, 1],       // 真实像素尺寸
         uAmount: 0.01,             // 效果强度
         uEffect: 10,                // 效果编号
-        uLightIntensity: 0.3
+        uLightIntensity: 0.3,
+        uThreshold: 1.0,
+        uSoftKnee: 0.5,
+        uSigma: 1.5,
     }
     effect: PostEffectType = 'bright'
 }
@@ -839,6 +842,6 @@ export class CompositeMaterial extends Material {
         uBloomTexture: 1,
         uIntensity: 0.8,
         uToneMap: 0,
-        uExposure: 1
+        uExposure: 1,
     }
 }
