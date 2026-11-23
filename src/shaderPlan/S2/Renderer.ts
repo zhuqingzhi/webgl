@@ -450,7 +450,6 @@ export class Renderer {
 
             intens[i] = l.intensity ?? 1
         }
-
         mesh.material.uniforms.uDirLightCount = count
     }
 

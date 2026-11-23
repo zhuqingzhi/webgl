@@ -95,17 +95,16 @@ planeMap.ready = true
   color: [0.5, 0.5, 0.5]
 }) */
 const planeMat = new MeshPhongMaterial({
-  map: texture
+  map: texture,
+  shininess: 64,
 })
 const glowMat = new MeshBasicMaterial({ color: [5, 4, 3] })
-const plane = new Mesh(planeGeo, glowMat)
-plane.position = [0, 0, 1]
+const plane = new Mesh(planeGeo, planeMat)
+plane.position = [0, 0, 0]
 plane.scale = [10, 10, 10]
-plane.rotation[0] = -Math.PI / 2
 
 const directionalLight = new DirectionalLight([1, 1, 1], 1)
-directionalLight.position = [1, 0, 0]
-directionalLight.position = [-1, 0, 0]
+directionalLight.position = [2, 0, 5]
 const target = new Object3D()
 target.position = [0, 0, 0]
 directionalLight.target = target
@@ -148,7 +147,7 @@ gui.add(obj, "bloomType", [0, 1]).name("辉光类型").onChange((val) => {
   renderer.bloomType = val as any
 })
 
-gui.add(obj, 'uThreshold', 0, 30, 0.01).name("辉光阈值").onChange(val => {
+gui.add(obj, 'uThreshold', 0, 10, 0.001).name("辉光阈值").onChange(val => {
   renderer.postProcessMaterial.uniforms.uThreshold = val
 })
 gui.add(obj, 'uSoftKnee', 0, 1, 0.01).name("软膝").onChange(val => {

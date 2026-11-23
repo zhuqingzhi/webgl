@@ -111,15 +111,15 @@ export function createPlane(
     // 顶点：按行列生成
     for (let y = 0; y <= segY; y++) {
         const v = y / segY
-        const z = v * height - halfH
+        const py = v * height - halfH
 
         for (let x = 0; x <= segX; x++) {
             const u = x / segX
             const px = u * width - halfW
 
             // XZ 平面，Y=0
-            positions.push(px, 0, z)
-            normals.push(0, 1, 0)
+            positions.push(px, py, 0)
+            normals.push(0, 0, 1)
             uv.push(u, v)
         }
     }
