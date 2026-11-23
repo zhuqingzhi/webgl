@@ -673,7 +673,7 @@ vec3 extractLight(vec2 uv){
     float lum=dot(c,vec3(0.2126,0.7152,0.0722));//rec.709亮度系数
     float knee=uThreshold*uSoftKnee;
     float soft=clamp(lum-uThreshold+knee,0.0,2.*knee);
-    soft=soft*soft/(4.*soft+1e-4);
+    soft=soft*soft/(4.*knee+1e-4);
     float contrib=max(soft,lum-uThreshold)/max(lum,1e-4);
     return c*contrib;
 }

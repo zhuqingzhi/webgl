@@ -245,7 +245,8 @@ export class Renderer {
                     unit: 0,
                     tex: this.mip2A.colorTex
                 }
-            ]
+            ],
+            clear: false
         })
         // mip1A->pingRT
         this.runPass({
@@ -256,8 +257,10 @@ export class Renderer {
                     unit: 0,
                     tex: this.mip1A.colorTex
                 }
-            ]
+            ],
+            clear: false
         })
+        this.gl.disable(this.gl.BLEND)
         // bloomTex=pingRT.colorTex
         this.bloomTex = pingRt.colorTex
     }
@@ -267,6 +270,7 @@ export class Renderer {
         mat.uniforms.uEffect = EFFECT_MAP[mat.effect]
         this.gl.clear(this.gl.COLOR_BUFFER_BIT)
         mat.uploadUniforms(this.gl)
+        this.gl.useProgram(mat.program)
         this.gl.activeTexture(this.gl.TEXTURE0)
         this.gl.bindTexture(this.gl.TEXTURE_2D, src.colorTex)
         this.gl.bindVertexArray(this.emptyVBO)
