@@ -219,7 +219,6 @@ export class Renderer {
                 }
             ]
         })
-
         // pingRT->blurH->pongRT->blurV->pingRT :第一级模糊
         this.runBlur(pingRt, pongRt)
         // pingRT->降采样->mip1A
@@ -269,8 +268,8 @@ export class Renderer {
         mat.effect = "none"
         mat.uniforms.uEffect = EFFECT_MAP[mat.effect]
         this.gl.clear(this.gl.COLOR_BUFFER_BIT)
-        mat.uploadUniforms(this.gl)
         this.gl.useProgram(mat.program)
+        mat.uploadUniforms(this.gl)
         this.gl.activeTexture(this.gl.TEXTURE0)
         this.gl.bindTexture(this.gl.TEXTURE_2D, src.colorTex)
         this.gl.bindVertexArray(this.emptyVBO)

@@ -544,6 +544,7 @@ uniform float uLightIntensity;
 uniform float uThreshold;
 uniform float uSoftKnee;
 uniform float uSigma;
+uniform float uRadius;
 
 // ── 色差：三次采样，RGB 通道朝不同方向偏移 ──
 vec3 chromatic(vec2 uv, float amount) {
@@ -739,7 +740,7 @@ void main() {
     }else if(uEffect ==6){
         col=blur3(vUv,texelSize);
     }else if(uEffect ==7){
-        col=blurGauss(vUv,texelSize,4.);
+        col=blurGauss(vUv,texelSize,uRadius);
     }else if(uEffect ==8){
         col=sharpen(vUv,2.,texelSize);
         // col=sharpenUSM(vUv,texelSize,2.);
@@ -748,9 +749,9 @@ void main() {
     }else if(uEffect ==10){
         col=extractLight(vUv);
     }else if(uEffect == 11){
-    col = blurH(vUv, texelSize, 1.5);
+    col = blurH(vUv, texelSize, uRadius);
     }else if(uEffect == 12){
-        col = blurV(vUv, texelSize, 1.5);
+        col = blurV(vUv, texelSize, uRadius);
     }else if(uEffect ==13){
         col=hdrScale(vUv);
     }else if(uEffect ==14){
@@ -773,6 +774,7 @@ void main() {
         uThreshold: 1.0,
         uSoftKnee: 0.5,
         uSigma: 1.5,
+        uRadius: 1.5
     }
     effect: PostEffectType = 'bright'
 }

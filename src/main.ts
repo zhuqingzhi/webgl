@@ -130,6 +130,7 @@ const obj = {
   uThreshold: 1.0,
   uSoftKnee: 0.5,
   uSigma: 1.5,
+  uRadius: 1.5
 }
 /* gui.add(obj, 'uLightIntensity', 0, 10, 0.01).name("提取光强度").onChange(val => {
   renderer.postProcessMaterial.uniforms.uLightIntensity = val
@@ -153,8 +154,11 @@ gui.add(obj, 'uThreshold', 0, 30, 0.01).name("辉光阈值").onChange(val => {
 gui.add(obj, 'uSoftKnee', 0, 1, 0.01).name("软膝").onChange(val => {
   renderer.postProcessMaterial.uniforms.uSoftKnee = val
 })
-gui.add(obj, 'uSigma', 0.5, 3, 0.01).name("模糊sigma").onChange(val => {
+gui.add(obj, 'uSigma', 0.5, 10, 0.01).name("模糊sigma").onChange(val => {
   renderer.postProcessMaterial.uniforms.uSigma = val
+})
+gui.add(obj, 'uRadius', 0.5, 10, 0.01).name("模糊uRadius").onChange(val => {
+  renderer.postProcessMaterial.uniforms.uRadius = val
 })
 
 function render() {
