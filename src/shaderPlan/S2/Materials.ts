@@ -266,8 +266,9 @@ export class MeshLambertMaterial extends Material {
                 
             }
             col=col+totalDiffuse;
-            col = col / (col + vec3(1.0));
-            fragColor=vec4(linearToSrgb(col),1.);
+            // col = col / (col + vec3(1.0));
+            // fragColor=vec4(linearToSrgb(col),1.);
+            fragColor=vec4(col,1.);
         }
     
     `
@@ -540,6 +541,9 @@ uniform vec2 uResolution;
 uniform float uAmount;
 uniform int uEffect;
 uniform float uLightIntensity;
+uniform float uThreshold;
+uniform float uSoftKnee;
+uniform float uSigma;
 
 // ── 色差：三次采样，RGB 通道朝不同方向偏移 ──
 vec3 chromatic(vec2 uv, float amount) {
@@ -593,12 +597,12 @@ vec3 blur3(vec2 uv,vec2 texelSize){
 vec3 blurGauss(vec2 uv,vec2 texelSize,float radius){
     vec3 totalCol=vec3(0.);
     float totalHeavy=0.;
-    float sigma=1.5;
+    float uSigma=1.5;
     for(int i=-2;i<=2;i++){
         for(int j=-2;j<=2;j++){
             vec2 offset=vec2(i,j);
             float r=length(offset);
-            float heavy=exp(-r*r/(2.*sigma*sigma));
+            float heavy=exp(-r*r/(2.*uSigma*uSigma));
             totalHeavy+=heavy;
             totalCol+=texture(uSceneTexture,uv+offset*texelSize*radius).rgb*heavy;
         }
@@ -657,19 +661,30 @@ vec3 sobel(vec2 uv,vec2 texelSize){
     return vec3(g);
 }
 // 提取亮部
-vec3 extractLight(vec2 uv){
+/* vec3 extractLight(vec2 uv){
     vec3 col=texture(uSceneTexture,uv).rgb;
     float lum=dot(col,vec3(.299,.587,.114));
     float m=step(uLightIntensity,lum);
     return col*m;
+} */
+
+// 软阈值提取
+vec3 extractLightSoft(vec2 uv){
+    vec3 c=texture(uSceneTexture,uv).rgb;
+    float lum=dot(c,vec3(0.2126,0.7152,0.0722));//rec.709亮度系数
+    float knee=uThreshold*uSoftKnee;
+    float soft=clamp(lum-uThreshold+knee,0.0,2.*knee);
+    soft=soft*soft/(4*soft+1e-4);
+    float contrib=max(soft,lum-uThreshold)/max(lum,1e-4);
+    return c*contrib;
 }
 // 9_tap水平模糊
 vec3 blurH(vec2 uv,vec2 texelSize,float radius){
     vec3 totalCol=vec3(0);
     float weight=0.;
-    float sigma=1.5;
+    float uSigma=1.5;
     for(int i=-4;i<=4;i++){
-        float w=exp(-float(i)*float(i)/(2.*sigma*sigma));
+        float w=exp(-float(i)*float(i)/(2.*uSigma*uSigma));
         totalCol+=texture(uSceneTexture,uv+vec2(float(i)*radius,0)*texelSize).rgb*w;
         weight+=w;
     }
@@ -678,9 +693,9 @@ vec3 blurH(vec2 uv,vec2 texelSize,float radius){
 vec3 blurV(vec2 uv,vec2 texelSize,float radius){
     vec3 totalCol=vec3(0.);
     float weight=0.;
-    float sigma=5.;
+    float uSigma=5.;
     for(int i=-4;i<=4;i++){
-        float w=exp(-float(i)*float(i)/(2.*sigma*sigma));
+        float w=exp(-float(i)*float(i)/(2.*uSigma*uSigma));
         totalCol+=texture(uSceneTexture,uv+vec2(0.,float(i)*radius)*texelSize).rgb*w;
         weight+=w;
     }
