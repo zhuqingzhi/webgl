@@ -236,3 +236,9 @@ export function createNormalMapCanvas(size = 256, freq = 8): HTMLCanvasElement {
     ctx.putImageData(img, 0, 0)
     return c
 }
+
+export function isArrayBufferView(
+    image: TexImageSource | ArrayBufferView,
+): image is ArrayBufferView {
+    return ArrayBuffer.isView(image)
+}

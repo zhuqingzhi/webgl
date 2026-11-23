@@ -45,7 +45,8 @@ const checker = new Texture({
   wrapS: renderer.gl.REPEAT,
   wrapT: renderer.gl.REPEAT,
   minFilter: renderer.gl.LINEAR_MIPMAP_LINEAR,
-  colorSpace: "linear"
+  colorSpace: "linear",
+  format: 'rgba8'
 })
 checker.ready = true
 const normalTex = new Texture({
@@ -53,7 +54,8 @@ const normalTex = new Texture({
   wrapS: renderer.gl.REPEAT,
   wrapT: renderer.gl.REPEAT,
   minFilter: renderer.gl.LINEAR_MIPMAP_LINEAR,
-  colorSpace: "linear"
+  colorSpace: "linear",
+  format: 'rgba8'
 })
 normalTex.ready = true
 const mat2 = new MeshPhongMaterial({
@@ -87,15 +89,32 @@ const planeMap = new Texture({
   minFilter: renderer.gl.NEAREST, */
   minFilter: renderer.gl.LINEAR_MIPMAP_LINEAR,
   // minFilter: renderer.gl.NEAREST,
-  colorSpace: "linear"
-
+  colorSpace: "linear",
+  format: 'rgba8'
 })
 planeMap.ready = true
 /* const planeMat = new MeshBasicMaterial({
   color: [0.5, 0.5, 0.5]
 }) */
+
+const testTex = new Texture({
+  image: new Float32Array([1, 0, 0, 1]),
+  wrapS: renderer.gl.REPEAT,
+  wrapT: renderer.gl.REPEAT,
+  minFilter: renderer.gl.LINEAR,
+  // minFilter: renderer.gl.LINEAR_MIPMAP_LINEAR,
+  // minFilter: renderer.gl.NEAREST,
+  magFilter: renderer.gl.NEAREST,
+  colorSpace: 'linear',
+  // format: 'rgba8',
+  // format: 'rgba16f',
+  format: 'rgba32f',
+  width: 1,
+  height: 1
+})
+testTex.ready = true
 const planeMat = new MeshPhongMaterial({
-  map: texture,
+  map: testTex,
   shininess: 64,
 })
 const glowMat = new MeshBasicMaterial({ color: [5, 4, 3] })

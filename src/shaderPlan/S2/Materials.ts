@@ -469,7 +469,8 @@ export class MeshPhongMaterial extends Material {
             col=col+totalSpecular+totalDiffuse;
             // col = col / (col + vec3(1.0));
             // fragColor=vec4(linearToSrgb(col),1.);
-            fragColor=vec4(col,1.);
+            // fragColor=vec4(col,1.);
+            fragColor = texture(uTexture, vUv);
 
         }
     

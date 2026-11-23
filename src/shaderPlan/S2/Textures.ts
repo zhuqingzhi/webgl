@@ -1,11 +1,15 @@
+import { isArrayBufferView } from "./utils"
 
 type TextureParamsType = {
-    image: TexImageSource,
+    image: TexImageSource | ArrayBufferView,
     wrapS?: number,
     wrapT?: number,
     minFilter?: number,
     magFilter?: number,
-    colorSpace: "srgb" | 'linear'
+    colorSpace: 'linear' | 'srgb',
+    format: TextureFormat,
+    width?: number
+    height?: number
 }
 const defaultTextureParameter = {
     wrapS: WebGLRenderingContext["CLAMP_TO_EDGE"],
@@ -13,8 +17,10 @@ const defaultTextureParameter = {
     minFilter: WebGLRenderingContext["LINEAR"],
     magFilter: WebGLRenderingContext["LINEAR"]
 }
+
+export type TextureFormat = "rgba8" | "srgb8" | 'rgba16f' | 'rgba32f'
 export class Texture {
-    image: TexImageSource
+    image: TexImageSource | ArrayBufferView
     wrapS: number
     wrapT: number
     minFilter: number
@@ -22,11 +28,14 @@ export class Texture {
     ready: boolean = false
     private texture: WebGLTexture | null = null
     needUpdate: boolean = true
+    format: TextureFormat
     colorSpace: TextureParamsType['colorSpace']
+    width: number
+    height: number
     constructor(params: TextureParamsType) {
         const { wrapS = defaultTextureParameter.wrapS, wrapT = defaultTextureParameter.wrapT,
             minFilter = defaultTextureParameter.minFilter, magFilter = defaultTextureParameter.magFilter,
-            colorSpace
+            colorSpace, format
         } = params
         this.image = params.image
         this.wrapS = wrapS
@@ -34,7 +43,9 @@ export class Texture {
         this.minFilter = minFilter
         this.magFilter = magFilter
         this.colorSpace = colorSpace
-
+        this.format = format
+        this.width = params.width ?? 0
+        this.height = params.height ?? 0
     }
     init(gl: WebGL2RenderingContext, unit: number) {
         let texture = this.texture
@@ -43,16 +54,20 @@ export class Texture {
         gl.bindTexture(gl.TEXTURE_2D, texture)
 
         if (!this.needUpdate) return
+        const { internalFormat, type } = this.getInternalFormat(gl)
 
-        const internalFormat = this.colorSpace === 'srgb' ? gl.SRGB8_ALPHA8 : gl.RGBA8
         if (!this.ready) {
-            gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
                 new Uint8Array([255, 0, 255, 255]))
         } else {
             gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
-            gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, gl.RGBA, gl.UNSIGNED_BYTE, this.image)
-
-            if ([gl.LINEAR_MIPMAP_LINEAR, gl.LINEAR_MIPMAP_NEAREST, gl.NEAREST_MIPMAP_LINEAR, gl.NEAREST_MIPMAP_NEAREST].includes(this.minFilter)) {
+            if (isArrayBufferView(this.image)) {
+                gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, this.width, this.height, 0, gl.RGBA, type, this.image)
+            } else {
+                gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, gl.RGBA, type, this.image)
+            }
+            const mipmaps: number[] = [gl.LINEAR_MIPMAP_LINEAR, gl.LINEAR_MIPMAP_NEAREST, gl.NEAREST_MIPMAP_LINEAR, gl.NEAREST_MIPMAP_NEAREST]
+            if (mipmaps.includes(this.minFilter)) {
                 gl.generateMipmap(gl.TEXTURE_2D)
             }
 
@@ -72,5 +87,32 @@ export class Texture {
         gl.activeTexture(gl.TEXTURE0 + unit)
         gl.bindTexture(gl.TEXTURE_2D, this.texture)
     }
-
+    private getInternalFormat(gl: WebGL2RenderingContext) {
+        if (this.format === 'srgb8') {
+            return {
+                internalFormat: gl.SRGB8_ALPHA8,
+                type: gl.UNSIGNED_BYTE
+            }
+        }
+        if (this.format === 'rgba16f') {
+            return {
+                internalFormat: gl.RGBA16F,
+                type: gl.FLOAT
+            }
+        }
+        if (this.format === 'rgba32f') {
+            const ext = gl.getExtension("OES_texture_float_linear")
+            if (!ext) {
+                console.warn("不支持 32 位浮点纹理线性过滤")
+            }
+            return {
+                internalFormat: gl.RGBA32F,
+                type: gl.FLOAT
+            }
+        }
+        return {
+            internalFormat: gl.RGBA8,
+            type: gl.UNSIGNED_BYTE
+        }
+    }
 }
