@@ -98,7 +98,7 @@ planeMap.ready = true
 }) */
 
 const testTex = new Texture({
-  image: new Float32Array([1, 0, 0, 1]),
+  image: new Float32Array([3.0, 2.0, 1.0, 1.0]),
   wrapS: renderer.gl.REPEAT,
   wrapT: renderer.gl.REPEAT,
   minFilter: renderer.gl.LINEAR,
@@ -107,16 +107,17 @@ const testTex = new Texture({
   magFilter: renderer.gl.NEAREST,
   colorSpace: 'linear',
   // format: 'rgba8',
-  // format: 'rgba16f',
-  format: 'rgba32f',
+  format: 'rgba16f',
+  // format: 'rgba32f',
   width: 1,
   height: 1
 })
 testTex.ready = true
-const planeMat = new MeshPhongMaterial({
+/* const planeMat = new MeshPhongMaterial({
   map: testTex,
   shininess: 64,
-})
+}) */
+const planeMat = new MeshBasicMaterial({ map: testTex })
 const glowMat = new MeshBasicMaterial({ color: [5, 4, 3] })
 const plane = new Mesh(planeGeo, planeMat)
 plane.position = [0, 0, 0]

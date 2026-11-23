@@ -103,7 +103,9 @@ export class Texture {
         if (this.format === 'rgba32f') {
             const ext = gl.getExtension("OES_texture_float_linear")
             if (!ext) {
-                console.warn("不支持 32 位浮点纹理线性过滤")
+                console.warn("不支持 32F 线性过滤，降级为 NEAREST")
+                this.minFilter = gl.NEAREST      // ← 加这两行
+                this.magFilter = gl.NEAREST
             }
             return {
                 internalFormat: gl.RGBA32F,

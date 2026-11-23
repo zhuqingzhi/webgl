@@ -6,6 +6,8 @@ import { MAX_LIGHTS } from "./Constants"
 type MaterialParamsType = {
     color?: vec3
     procedural?: ProceduralType
+    map?: Texture,
+
 }
 export class Material {
     vertexShader!: WebGLShader
@@ -30,9 +32,11 @@ export class Material {
     }> = new Map()
     color?: vec3
     type: string = 'Material'
+    map?: Texture
     private warnedUniforms = new Set<string>()
     constructor(params: MaterialParamsType) {
         this.color = params.color ?? [1, 1, 1]
+        this.map = params.map
         this.syncUniforms()
     }
     initShader(gl: WebGL2RenderingContext) {
@@ -132,6 +136,7 @@ export class Material {
         }
     }
     syncUniforms() {
+        this.uniforms.uHasMap = !!this.map
         this.uniforms['uColor'] = this.uniforms["uMaterial.color"] = colorToLinear(this.color ?? [1, 1, 1])
     }
 }
@@ -155,6 +160,8 @@ export class MeshBasicMaterial extends Material {
         out vec4 fragColor;
         in vec2 vUv;
         uniform int uProcedural;
+        uniform sampler2D uTexture;
+        uniform bool uHasMap;
         float checker(vec2 uv, float n) {
             vec2 p = uv * n;
             vec2 w = fwidth(p);                       // 屏幕空间导数，一个像素跨多少格子
@@ -168,7 +175,12 @@ export class MeshBasicMaterial extends Material {
         }
         void main(){
             vec3 albedo = computeAlbedo();
-            fragColor=vec4(uColor*albedo,1.);
+            vec3 tex=texture(uTexture,vUv).rgb;
+            vec3 col=uColor*albedo;
+            if(uHasMap){
+                col*=tex;
+            }
+            fragColor=vec4(col,1.);
         }
     
     `
@@ -283,7 +295,6 @@ export class MeshLambertMaterial extends Material {
 type PhongMaterialType = {
     shininess?: number,
     specular?: vec3,
-    map?: Texture,
     normalMap?: Texture,
     procedural?: ProceduralType
 }

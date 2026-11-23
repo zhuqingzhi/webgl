@@ -8,7 +8,8 @@ export class TextureLoader extends Loader {
         const img = new Image()
         const texture = new Texture({
             image: img,
-            colorSpace: "srgb"
+            colorSpace: "srgb",
+            format: "srgb8"
         })
         img.onload = e => {
             texture.ready = true
