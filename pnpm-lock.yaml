@@ -11,6 +11,9 @@ importers:
       gl-matrix:
         specifier: ^3.4.4
         version: 3.4.4
+      gsap:
+        specifier: ^3.15.1
+        version: 3.15.1
       kokomi.js:
         specifier: ^1.11.0
         version: 1.11.0(three@0.185.1)
@@ -238,6 +241,9 @@ packages:
 
   gsap@3.15.0:
     resolution: {integrity: sha512-dMW4CWBTUK1AEEDeZc1g4xpPGIrSf9fJF960qbTZmN/QwZIWY5wgliS6JWl9/25fpTGJrMRtSjGtOmPnfjZB+A==}
+
+  gsap@3.15.1:
+    resolution: {integrity: sha512-63yjWRFWj3QRP1UOuD8kcidCcy3nxb1mMRpwHr/xJRvPfm9GtWOXFAYUiL0ro1fgPq2nY53LR+98pAgy9BumBg==}
 
   imagesloaded@5.0.0:
     resolution: {integrity: sha512-/0JGSubc1MTCoDKVmonLHgbifBWHdyLkun+R/151E1c5n79hiSxcd7cB7mPXFgojYu8xnRZv7GYxzKoxW8BetQ==}
@@ -657,6 +663,8 @@ snapshots:
       through2: 0.6.5
 
   gsap@3.15.0: {}
+
+  gsap@3.15.1: {}
 
   imagesloaded@5.0.0:
     dependencies:

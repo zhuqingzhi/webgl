@@ -338,6 +338,7 @@ export class MeshPhongMaterial extends Material {
         in vec3 vTangent;
 
         uniform sampler2D uTexture;
+        uniform bool uHasMap;
         uniform sampler2D uNormalMap;
         uniform bool uHasNormalMap;
 
@@ -438,9 +439,6 @@ export class MeshPhongMaterial extends Material {
             }
 
             vec3 V=normalize(uCameraPos-vWorldPos);
-            vec4 tex=texture(uTexture,vUv);
-       
-            
             vec3 albedo = computeAlbedo();
             vec3 ambientColor = albedo * uAmbientColor;
             vec3 col=ambientColor;
@@ -478,10 +476,7 @@ export class MeshPhongMaterial extends Material {
                 totalSpecular+=lightColor*uMaterial.specular*specular*attenuation*intensity;
             }
             col=col+totalSpecular+totalDiffuse;
-            // col = col / (col + vec3(1.0));
-            // fragColor=vec4(linearToSrgb(col),1.);
-            // fragColor=vec4(col,1.);
-            fragColor = texture(uTexture, vUv);
+            fragColor = vec4(col,1.);
 
         }
     

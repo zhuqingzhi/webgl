@@ -6,6 +6,7 @@ import { Texture } from "./shaderPlan/S2/Textures";
 import { Renderer } from "./shaderPlan/S2/Renderer";
 import { AmbientLight, DirectionalLight, SpotLight } from "./shaderPlan/S2/Light";
 import GUI from "three/examples/jsm/libs/lil-gui.module.min.js";
+import gsap from "gsap";
 
 
 const canvas = document.getElementById("canvas")! as HTMLCanvasElement;
@@ -97,103 +98,59 @@ planeMap.ready = true
   color: [0.5, 0.5, 0.5]
 }) */
 
-const testTex = new Texture({
-  image: new Float32Array([3.0, 2.0, 1.0, 1.0]),
-  wrapS: renderer.gl.REPEAT,
-  wrapT: renderer.gl.REPEAT,
-  minFilter: renderer.gl.LINEAR,
-  // minFilter: renderer.gl.LINEAR_MIPMAP_LINEAR,
-  // minFilter: renderer.gl.NEAREST,
-  magFilter: renderer.gl.NEAREST,
-  colorSpace: 'linear',
-  // format: 'rgba8',
-  format: 'rgba16f',
-  // format: 'rgba32f',
-  width: 1,
-  height: 1
-})
-testTex.ready = true
-/* const planeMat = new MeshPhongMaterial({
-  map: testTex,
-  shininess: 64,
-}) */
-const planeMat = new MeshBasicMaterial({ map: testTex })
+const concrete = textureLoader.load("/concrete2/textures/herringbone_concrete_tile_03_diff_2k.jpg")
+concrete.colorSpace = 'srgb'
+const concreteNormalMap = textureLoader.load("/concrete2/textures/herringbone_concrete_tile_03_nor_gl_2k.jpg")
+concreteNormalMap.colorSpace = 'linear'
+concreteNormalMap.format = 'rgba8'
+const planeMat = new MeshPhongMaterial({ procedural: 'none', map: concrete, color: [1, 1, 1], shininess: 64, specular: [1, 1, 1] })
 const glowMat = new MeshBasicMaterial({ color: [5, 4, 3] })
 const plane = new Mesh(planeGeo, planeMat)
 plane.position = [0, 0, 0]
 plane.scale = [10, 10, 10]
 
-const directionalLight = new DirectionalLight([1, 1, 1], 1)
+const directionalLight = new DirectionalLight([1, 1, 1], 0.3)
 directionalLight.position = [2, 0, 5]
 const target = new Object3D()
 target.position = [0, 0, 0]
 directionalLight.target = target
 
 const ambientLight = new AmbientLight([1, 1, 1,], 0.1)
-const spotLight = new SpotLight([1, 0, 0], 10)
-spotLight.position = [5, 0, 0]
-const spotLight2 = new SpotLight([0, 1, 0], 10)
-spotLight2.position = [0, 5, 0]
-const spotLight3 = new SpotLight([0, 0, 1], 10)
-spotLight3.position = [0, 0, 5]
 
 const gui = new GUI({
   autoPlace: true
 })
 const obj = {
-  uLightIntensity: 0.3,
-  uIntensity: 0.8,
-  uToneMap: 0,
-  uExposure: 1,
-  bloomType: 0,
-  uThreshold: 1.0,
-  uSoftKnee: 0.5,
-  uSigma: 1.5,
-  uRadius: 1.5
+  showNormalMap: false
 }
-/* gui.add(obj, 'uLightIntensity', 0, 10, 0.01).name("提取光强度").onChange(val => {
-  renderer.postProcessMaterial.uniforms.uLightIntensity = val
-}) */
-gui.add(obj, 'uIntensity', 0, 1, 0.1).name("辉光强度").onChange(val => {
-  renderer.compositeMaterial.uniforms.uIntensity = val
-})
-gui.add(obj, "uToneMap", [0, 1, 2, 3]).name("色调映射").onChange(val => {
-  renderer.compositeMaterial.uniforms.uToneMap = val
-})
-gui.add(obj, "uExposure", 0, 10, 0.1).name("曝光度").onChange(val => {
-  renderer.compositeMaterial.uniforms.uExposure = val
-})
-gui.add(obj, "bloomType", [0, 1]).name("辉光类型").onChange((val) => {
-  renderer.bloomType = val as any
+gui.add(obj, 'showNormalMap', [true, false]).onChange(val => {
+  if (val) {
+    planeMat.normalMap = concreteNormalMap
+  } else {
+    planeMat.normalMap = undefined
+  }
 })
 
-gui.add(obj, 'uThreshold', 0, 10, 0.001).name("辉光阈值").onChange(val => {
-  renderer.postProcessMaterial.uniforms.uThreshold = val
-})
-gui.add(obj, 'uSoftKnee', 0, 1, 0.01).name("软膝").onChange(val => {
-  renderer.postProcessMaterial.uniforms.uSoftKnee = val
-})
-gui.add(obj, 'uSigma', 0.5, 10, 0.01).name("模糊sigma").onChange(val => {
-  renderer.postProcessMaterial.uniforms.uSigma = val
-})
-gui.add(obj, 'uRadius', 0.5, 10, 0.01).name("模糊uRadius").onChange(val => {
-  renderer.postProcessMaterial.uniforms.uRadius = val
-})
+const lightPos = { x: 4, y: 0, z: 5 }
+
+/* gsap.fromTo(
+  lightPos,
+  { x: 4, y: 0, z: 5 },
+  {
+    x: -4,
+    duration: 4,
+    repeat: -1,
+    yoyo: true,
+    onUpdate: () => {
+      directionalLight.position[0] = lightPos.x
+      directionalLight.position[1] = lightPos.y
+      directionalLight.position[2] = lightPos.z
+    },
+  },
+) */
 
 function render() {
-  const t = performance.now() * 0.001
-  sphere2.rotation[1] += 0.03
   renderer.render([directionalLight, ambientLight, plane], camera)
   requestAnimationFrame(render)
 }
 render()
-
-const effects: PostEffectType[] = ['none', 'grayscale', 'invert', 'chromatic', 'vignette', 'scanline']
-let idx = 0
-window.addEventListener('keydown', e => {
-  if (e.key === ' ') {
-    idx = (idx + 1) % effects.length
-    renderer.postProcessMaterial.effect = effects[idx]
-    console.log('effect:', effects[idx])
-  }
-})
