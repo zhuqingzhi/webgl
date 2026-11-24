@@ -297,6 +297,7 @@ type PhongMaterialType = {
     specular?: vec3,
     normalMap?: Texture,
     procedural?: ProceduralType
+    normalScale?: number
 }
 type ProceduralType = 'none' | 'checker' | 'wood' | 'marble' | 'cloud'
 export class MeshPhongMaterial extends Material {
@@ -341,6 +342,7 @@ export class MeshPhongMaterial extends Material {
         uniform bool uHasMap;
         uniform sampler2D uNormalMap;
         uniform bool uHasNormalMap;
+        uniform float uNormalScale;
 
         in vec3 vNormal;
         in vec3 vWorldPos;
@@ -435,6 +437,7 @@ export class MeshPhongMaterial extends Material {
                 vec3 B=normalize(cross(N,T));
                 mat3 TBN=mat3(T,B,N);
                 vec3 n=texture(uNormalMap,vUv).xyz*2.-1.;
+                n.xy*=uNormalScale;
                 N=normalize(TBN*n);
             }
 
@@ -487,6 +490,7 @@ export class MeshPhongMaterial extends Material {
     map?: Texture
     normalMap?: Texture
     procedural?: ProceduralType
+    normalScale?: number
 
     constructor(params: MaterialParamsType & PhongMaterialType) {
         super(params)
@@ -495,6 +499,7 @@ export class MeshPhongMaterial extends Material {
         this.map = params.map
         this.normalMap = params.normalMap
         this.procedural = params.procedural
+        this.normalScale = params.normalScale
     }
     syncUniforms(): void {
         super.syncUniforms()
@@ -503,6 +508,7 @@ export class MeshPhongMaterial extends Material {
         this.uniforms['uMaterial.specular'] = this.specular ?? [1, 1, 1]
         this.uniforms['uMaterial.shininess'] = this.shininess ?? 30
         this.uniforms['uHasNormalMap'] = !!this.normalMap
+        this.uniforms['uNormalScale'] = this.normalScale
         const PROC_MAP = { none: 0, checker: 1, wood: 2, marble: 3, cloud: 4 }
         this.uniforms.uProcedural = PROC_MAP[this.procedural ?? 'none']
     }

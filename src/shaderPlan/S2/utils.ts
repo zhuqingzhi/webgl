@@ -53,6 +53,37 @@ export function createSphere(radius: number, divideByYAxis: number, divideByCirc
         uv: new Float32Array(uv)
     };
 }
+export function createWavePlane(
+    width = 1,
+    height = 1,
+    segX = 100,
+    segY = 100,
+    freq = 5,
+) {
+    const plane = createPlane(width, height, segX, segY)
+    const amplitude = 0.02
+    const w = 2 * Math.PI * freq
+
+    for (let i = 0; i < plane.positions.length / 3; i++) {
+        const u = plane.uv[i * 2]
+        const v = plane.uv[i * 2 + 1]
+
+        // z = amplitude * (sin(wu) + cos(wv))
+        plane.positions[i * 3 + 2] =
+            amplitude * (Math.sin(w * u) + Math.cos(w * v))
+
+        const nx = -amplitude * w * Math.cos(w * u) / width
+        const ny = amplitude * w * Math.sin(w * v) / height
+        const length = Math.hypot(nx, ny, 1)
+
+        plane.normals[i * 3] = nx / length
+        plane.normals[i * 3 + 1] = ny / length
+        plane.normals[i * 3 + 2] = 1 / length
+    }
+
+    return plane
+}
+
 export function isMesh(mesh: Object3D): mesh is Mesh {
     return mesh.type === 'Mesh'
 }

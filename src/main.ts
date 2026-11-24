@@ -1,5 +1,5 @@
 import { Geometry, Mesh, Object3D, PerspectiveCamera, } from "./shaderPlan/S2/D5"
-import { createCheckerCanvas, createNormalMapCanvas, createPlane, createSphere, createWhiteCanvas } from "./shaderPlan/S2/utils"
+import { createCheckerCanvas, createNormalMapCanvas, createPlane, createSphere, createWavePlane, createWhiteCanvas } from "./shaderPlan/S2/utils"
 import { MeshBasicMaterial, MeshPhongMaterial, type PostEffectType } from "./shaderPlan/S2/Materials"
 import { TextureLoader } from "./shaderPlan/S2/Loader";
 import { Texture } from "./shaderPlan/S2/Textures";
@@ -23,24 +23,14 @@ const renderer = new Renderer({
 })
 const camera = new PerspectiveCamera(Math.PI / 3, canvas.width / canvas.height, 0.1, 1000)
 camera.position = [0, 0, 15]
-const sphereBuffer = createSphere(1, 30, 30)
-const geo = new Geometry({
-  indices: sphereBuffer.indices,
-  positions: sphereBuffer.positions,
-  normals: sphereBuffer.normals,
-  uv: sphereBuffer.uv
-})
+
 const textureLoader = new TextureLoader()
 const texture = textureLoader.load("./color.jpg")
 texture.wrapS = renderer.gl.CLAMP_TO_EDGE
 texture.wrapT = renderer.gl.CLAMP_TO_EDGE
 // texture.colorSpace = 'linear'
 const image = createCheckerCanvas(512, 8)
-/* const checker = new Texture({
-  image,
-  wrapS: renderer.gl.REPEAT,
-  wrapT: renderer.gl.REPEAT
-}) */
+
 const checker = new Texture({
   image,
   wrapS: renderer.gl.REPEAT,
@@ -50,15 +40,7 @@ const checker = new Texture({
   format: 'rgba8'
 })
 checker.ready = true
-const normalTex = new Texture({
-  image: createNormalMapCanvas(256, 5),
-  wrapS: renderer.gl.REPEAT,
-  wrapT: renderer.gl.REPEAT,
-  minFilter: renderer.gl.LINEAR_MIPMAP_LINEAR,
-  colorSpace: "linear",
-  format: 'rgba8'
-})
-normalTex.ready = true
+
 const mat2 = new MeshPhongMaterial({
   color: [1, 1, 1],
   specular: [1, 1, 1],
@@ -72,10 +54,9 @@ const mat2 = new MeshPhongMaterial({
 /* const mat2 = new MeshLambertMaterial({
   color: [1, 0.5, 0],
 }) */
-const sphere2 = new Mesh(geo, mat2)
-sphere2.position = [0, 0, 0]
 
 const planeParam = createPlane(1, 1, 10, 10)
+// const planeParam = createWavePlane(1, 1, 10, 10)
 const planeGeo = new Geometry(planeParam)
 
 const whiteCanvas = createWhiteCanvas(512)
@@ -94,16 +75,24 @@ const planeMap = new Texture({
   format: 'rgba8'
 })
 planeMap.ready = true
-/* const planeMat = new MeshBasicMaterial({
-  color: [0.5, 0.5, 0.5]
-}) */
+
 
 const concrete = textureLoader.load("/concrete2/textures/herringbone_concrete_tile_03_diff_2k.jpg")
 concrete.colorSpace = 'srgb'
+concrete.wrapS = concrete.wrapT = renderer.gl.REPEAT
 const concreteNormalMap = textureLoader.load("/concrete2/textures/herringbone_concrete_tile_03_nor_gl_2k.jpg")
 concreteNormalMap.colorSpace = 'linear'
 concreteNormalMap.format = 'rgba8'
-const planeMat = new MeshPhongMaterial({ procedural: 'none', map: concrete, color: [1, 1, 1], shininess: 64, specular: [1, 1, 1] })
+const planeMat = new MeshPhongMaterial({ procedural: 'none', map: concrete, color: [1, 1, 1], shininess: 32, specular: [0.5, 0.5, 0.5], normalScale: 0.5 })
+const testNormal = new Texture({
+  image: createNormalMapCanvas(256, 5),
+  wrapS: renderer.gl.REPEAT,
+  wrapT: renderer.gl.REPEAT,
+  minFilter: renderer.gl.LINEAR_MIPMAP_LINEAR,
+  colorSpace: 'linear',      // 数据贴图，绝对不能用 srgb
+  format: 'rgba8'
+})
+testNormal.ready = true
 const glowMat = new MeshBasicMaterial({ color: [5, 4, 3] })
 const plane = new Mesh(planeGeo, planeMat)
 plane.position = [0, 0, 0]
@@ -121,8 +110,11 @@ const gui = new GUI({
   autoPlace: true
 })
 const obj = {
-  showNormalMap: false
+  showNormalMap: false,
+  rotateZ: 0,
+  normalScale: 0.5
 }
+
 gui.add(obj, 'showNormalMap', [true, false]).onChange(val => {
   if (val) {
     planeMat.normalMap = concreteNormalMap
@@ -130,9 +122,23 @@ gui.add(obj, 'showNormalMap', [true, false]).onChange(val => {
     planeMat.normalMap = undefined
   }
 })
-
-const lightPos = { x: 4, y: 0, z: 5 }
-
+gui.add(obj, "normalScale", 0, 5, 0.01).onChange(val => {
+  planeMat.normalScale = val
+})
+// 加一个绕 Z 轴旋转的控制
+gui.add(obj, 'rotateZ', -Math.PI, Math.PI, 0.01).onChange(v => {
+  plane.rotation[2] = v
+})
+const lightPos = { x: 2, y: 0, z: 5 }
+gui.add(lightPos, 'x', -5, 5, 0.01).onChange(val => {
+  directionalLight.position[0] = val
+})
+gui.add(lightPos, 'y', -5, 5, 0.01).onChange(val => {
+  directionalLight.position[1] = val
+})
+gui.add(lightPos, 'z', -5, 5, 0.01).onChange(val => {
+  directionalLight.position[2] = val
+})
 /* gsap.fromTo(
   lightPos,
   { x: 4, y: 0, z: 5 },
