@@ -513,6 +513,248 @@ export class MeshPhongMaterial extends Material {
         this.uniforms.uProcedural = PROC_MAP[this.procedural ?? 'none']
     }
 }
+type StandardMaterialType = {
+    normalMap?: Texture,
+    procedural?: ProceduralType
+    normalScale?: number
+    metallic?: number
+    roughness?: number
+}
+export class MeshStandardMaterial extends Material {
+    vertexString = `#version 300 es
+        in vec3 aPosition;
+        in vec3 aNormal;
+        in vec2 aUv;
+        in vec3 aTangent;
+        out vec2 vUv;
+        out vec3 vNormal;
+        out vec3 vWorldPos;
+        out vec3 vTangent;
+        uniform mat4 modelMatrix;
+        uniform mat3 normalMatrix;
+        uniform mat4 viewMatrix;
+        uniform mat4 projectionMatrix;
+        void main(){
+            vec4 worldPos=modelMatrix*vec4(aPosition,1.);
+            vWorldPos=worldPos.xyz;
+            vNormal=normalize(normalMatrix*aNormal);
+            gl_Position=projectionMatrix*viewMatrix*worldPos;
+            vUv=aUv;
+            vTangent=normalize(normalMatrix*aTangent);
+        }
+    `
+    fragmentString = `#version 300 es
+        precision highp float;
+        const int MAX_LIGHTS=8;
+        const float PI=3.1415926;
+        out vec4 fragColor;
+        uniform vec3 uLightColor[MAX_LIGHTS];
+        uniform vec3 uLightPosition[MAX_LIGHTS];
+        uniform float uLightIntensity[MAX_LIGHTS];
+        uniform int uLightCount;
+        uniform vec3 uDirectLightColor[MAX_LIGHTS];
+        uniform vec3 uDirectLightDirection[MAX_LIGHTS];
+        uniform float uDirectLightIntensity[MAX_LIGHTS];
+        uniform int uDirLightCount;
+        in vec2 vUv;
+        in vec3 vTangent;
+
+        uniform sampler2D uTexture;
+        uniform bool uHasMap;
+        uniform sampler2D uNormalMap;
+        uniform bool uHasNormalMap;
+        uniform float uNormalScale;
+
+        in vec3 vNormal;
+        in vec3 vWorldPos;
+        uniform vec3 uAmbientColor;
+
+        uniform vec3 uCameraPos;
+        uniform int uProcedural;
+
+        // PBR都有
+        uniform float uRoughness;
+        uniform float uMetallic;
+
+        struct Material{
+            vec3 color;
+        };
+        uniform Material uMaterial;
+        uniform float uTime;
+
+        // ---- BRDF 三项 ----
+        float distributionGGX(vec3 N, vec3 H, float roughness) {
+            float a  = roughness * roughness;
+            float a2 = a * a;
+            float NdotH = max(dot(N, H), 0.0);
+            float denom = NdotH * NdotH * (a2 - 1.0) + 1.0;
+            return a2 / (PI * denom * denom);
+        }
+        
+        float geometrySchlickGGX(float NdotV, float roughness) {
+            float r = roughness + 1.0;
+            float k = (r * r) / 8.0;
+            return NdotV / (NdotV * (1.0 - k) + k);
+        }
+        
+        float geometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
+            float NdotV = max(dot(N, V), 0.0);
+            float NdotL = max(dot(N, L), 0.0);
+            return geometrySchlickGGX(NdotV, roughness) * geometrySchlickGGX(NdotL, roughness);
+        }
+        
+        vec3 fresnelSchlick(float cosTheta, vec3 F0) {
+            return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+        }
+
+        vec3 linearToSrgb(vec3 c) {
+            return mix(
+                c * 12.92,
+                1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055,
+                step(vec3(0.0031308), c)
+            );
+        }
+        float checker(vec2 uv, float n) {
+            vec2 p = uv * n;
+            vec2 w = fwidth(p);                       // 屏幕空间导数，一个像素跨多少格子
+            vec2 i = 2.0 * (abs(fract((p - 0.5 * w) * 0.5) - 0.5)
+                        - abs(fract((p + 0.5 * w) * 0.5) - 0.5)) / w;
+            return 0.5 - 0.5 * i.x * i.y;
+        }
+        float hash(vec2 p) {
+            p = fract(p * vec2(123.34, 456.21));
+            p += dot(p, p + 45.32);
+            return fract(p.x * p.y);
+        }
+        float noise(vec2 p) {
+            vec2 i = floor(p);              // 格子索引
+            vec2 f = fract(p);              // 格内坐标 0~1
+            f = f * f * (3.0 - 2.0 * f);    // smoothstep，让插值在边界处平滑
+
+            float a = hash(i);                          // 左下
+            float b = hash(i + vec2(1.0, 0.0));         // 右下
+            float c = hash(i + vec2(0.0, 1.0));         // 左上
+            float d = hash(i + vec2(1.0, 1.0));         // 右上
+
+            return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+        }
+        float fbm(vec2 p) {
+            float v = 0.0;
+            float a = 0.5;
+            for (int i = 0; i < 5; i++) {
+                v += a * noise(p);
+                p *= 2.0;       // 频率翻倍
+                a *= 0.5;       // 振幅减半
+            }
+            return v;
+        }
+        vec3 wood(vec2 uv) {
+            vec2 q = uv * vec2(2.0, 1.0);
+            float grain = fbm(q * 4.0);                      // 木纹扰动
+            float rings = sin((q.x * 8.0 + grain * 3.0) * 3.14159);
+            return mix(vec3(0.35, 0.18, 0.08),
+                    vec3(0.70, 0.45, 0.25),
+                    rings * 0.5 + 0.5);
+        }
+        vec3 marble(vec2 uv) {
+            float m = fbm(uv * 3.0);
+            float veins = abs(sin(uv.x * 6.0 + m * 8.0));
+            return mix(vec3(0.05), vec3(0.95), pow(veins, 0.3));
+        }
+        vec3 cloud(vec2 uv) {
+            float c = fbm(uv * 8.0+uTime*0.001);
+            return mix(vec3(0.30, 0.50, 0.80),
+                    vec3(1.0),
+                    smoothstep(0.5, 0.9, c));
+        }
+        vec3 computeAlbedo() {
+            if (uProcedural == 0) return uMaterial.color * texture(uTexture, vUv).rgb;
+            if (uProcedural == 1) return vec3(checker(vUv, 8.0));
+            if (uProcedural == 2) return wood(vUv);
+            if (uProcedural == 3) return marble(vUv);
+            if (uProcedural == 4) return cloud(vUv);
+            return uMaterial.color;
+        }
+        void main(){
+            vec3 totalDiffuse=vec3(0.);
+            vec3 totalSpecular=vec3(0.);
+            vec3 N=normalize(vNormal);
+
+            if(uHasNormalMap){
+                vec3 T=normalize(vTangent);
+                vec3 B=normalize(cross(N,T));
+                mat3 TBN=mat3(T,B,N);
+                vec3 n=texture(uNormalMap,vUv).xyz*2.-1.;
+                n.xy*=uNormalScale;
+                N=normalize(TBN*n);
+            }
+
+            vec3 V=normalize(uCameraPos-vWorldPos);
+            vec3 albedo = computeAlbedo();
+            float roughness = clamp(uRoughness, 0.04, 1.0);   // ← 坑：clamp 到 0.04
+            float metallic  = uMetallic;
+            
+            // F0：绝缘体 0.04，金属用 albedo
+            vec3 F0 = mix(vec3(0.04), albedo, metallic);
+            vec3 Lo = vec3(0.0);
+            for (int i = 0; i < MAX_LIGHTS; i++) {
+                if (i >= uDirLightCount) break;
+                vec3 L = normalize(uDirectLightDirection[i]);
+                vec3 H = normalize(L + V);
+                float NdotL = max(dot(N, L), 0.0);
+                float NdotV = max(dot(N, V), 0.0);
+                if (NdotL <= 0.0) continue;
+                
+                float D = distributionGGX(N, H, roughness);
+                float G = geometrySmith(N, V, L, roughness);
+                vec3  F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+                
+                vec3 numerator   = D * G * F;
+                float denominator = 4.0 * NdotL * NdotV + 0.0001;
+                vec3 specular = numerator / denominator;
+                
+                // 能量守恒：漫反射只拿没被反射的部分
+                vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
+                vec3 diffuse = kD * albedo / PI;
+                
+                vec3 radiance = uDirectLightColor[i] * uDirectLightIntensity[i];
+                Lo += (diffuse + specular) * radiance * NdotL;
+            }
+            
+            vec3 ambient = albedo * uAmbientColor * (1.0 - metallic);   // 简化版
+            fragColor = vec4(ambient + Lo, 1.0);
+
+        }
+    
+    `
+    metallic?: number
+    roughness?: number
+    type: string = 'MeshStandardMaterial'
+    map?: Texture
+    normalMap?: Texture
+    procedural?: ProceduralType
+    normalScale?: number
+
+    constructor(params: MaterialParamsType & StandardMaterialType) {
+        super(params)
+        this.metallic = params.metallic ?? 0
+        this.roughness = params.roughness ?? 1
+        this.map = params.map
+        this.normalMap = params.normalMap
+        this.procedural = params.procedural
+        this.normalScale = params.normalScale ?? 1
+    }
+    syncUniforms(): void {
+        super.syncUniforms()
+        this.uniforms['uMetallic'] = this.metallic
+        this.uniforms['uRoughness'] = this.roughness
+        this.uniforms['uHasNormalMap'] = !!this.normalMap
+        this.uniforms['uNormalScale'] = this.normalScale
+        const PROC_MAP = { none: 0, checker: 1, wood: 2, marble: 3, cloud: 4 }
+        this.uniforms.uProcedural = PROC_MAP[this.procedural ?? 'none']
+    }
+}
+
 export type PostEffectType =
     | 'none'        // 直通
     | 'grayscale'   // 灰度
@@ -530,6 +772,7 @@ export type PostEffectType =
     //hdr debug 效果
     | 'hdrScale'    // 值除以 4
     | 'hdrOver'     // 超 1 标红
+    | "srgb"
 export class PostProcessMaterial extends Material {
     vertexString = `#version 300 es
         out vec2 vUv;
@@ -726,6 +969,16 @@ vec3 hdrOver(vec2 uv) {
     float m = max(max(c.r, c.g), c.b);
     return m > 1. ? vec3(1.0, 0.0, 0.0) : c;
 }
+
+// 转srgb
+vec3 linearToSrgb(vec3 color) {
+      color = max(color, vec3(0.0));
+      return mix(
+        12.92 * color,
+        1.055 * pow(color, vec3(1.0 / 2.4)) - 0.055,
+        step(vec3(0.0031308), color)
+      );
+}
 void main() {
     vec3 col;
     vec2 texelSize=1./uResolution;
@@ -769,6 +1022,8 @@ void main() {
         col=hdrScale(vUv);
     }else if(uEffect ==14){
         col=hdrOver(vUv);
+    }else if(uEffect ==15){
+        col=linearToSrgb(texture(uSceneTexture,vUv).rgb);
     }else{
         col=texture(uSceneTexture,vUv).rgb;
     }

@@ -6,7 +6,7 @@ import { RenderTarget } from "./RenderTarget"
 
 export interface PassContext {
     readBuffer: RenderTarget
-    writeBuffer: RenderTarget | null
+    writeBuffer: RenderTarget
     textures: Map<string, WebGLTexture>
     renderer: Renderer
 }
@@ -267,13 +267,24 @@ export class BloomPass extends Pass {
 export class OutputPass extends Pass {
     enabled: boolean = true
     needsSwap: boolean = true
-
+    material2!: CompositeMaterial
     render(ctx: PassContext): void {
         super.run({
             target: ctx.writeBuffer,
             inputs: [
                 {
                     tex: ctx.readBuffer.colorTex,
+                    unit: 0
+                },
+            ],
+            material: this.material2,
+            clear: true
+        })
+        super.run({
+            target: null,
+            inputs: [
+                {
+                    tex: ctx.writeBuffer.colorTex,
                     unit: 0
                 },
             ],
@@ -287,10 +298,15 @@ export class OutputPass extends Pass {
     init(gl: WebGL2RenderingContext): void {
         super.init(gl)
         const material = new PostProcessMaterial({})
-        material.effect = 'none'
+        material.effect = 'srgb'
         material.uniforms.uEffect = EFFECT_MAP[material.effect]
         this.material = material
         this.material.initShader(gl)
+
+        const mat2 = new CompositeMaterial({})
+        mat2.uniforms.uToneMap = 2
+        mat2.initShader(gl)
+        this.material2 = mat2
     }
 }
 
@@ -319,7 +335,7 @@ export class EffectComposer {
             const element = this.passes[index]
             if (!element?.enabled) continue
             element.render({
-                writeBuffer: index === this.passes.length - 1 ? null : this.writeBuffer,
+                writeBuffer: this.writeBuffer,
                 readBuffer: this.readBuffer,
                 textures,
                 renderer: this.renderer
