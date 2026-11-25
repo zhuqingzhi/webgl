@@ -1100,7 +1100,6 @@ export class CompositeMaterial extends Material {
             }else if(uToneMap==2){
                 ldr=aces(ldr);
             }
-            ldr = pow(ldr, vec3(1.0 / 2.2)); 
             fragColor = vec4(ldr, 1.0);
         }
     `
