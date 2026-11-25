@@ -7,6 +7,7 @@ import { Renderer } from "./shaderPlan/S2/Renderer";
 import { AmbientLight, DirectionalLight, SpotLight } from "./shaderPlan/S2/Light";
 import GUI from "three/examples/jsm/libs/lil-gui.module.min.js";
 import gsap from "gsap";
+import { BloomPass, EffectComposer, OutputPass, RenderPass } from "./shaderPlan/S2/Pass";
 
 
 const canvas = document.getElementById("canvas")! as HTMLCanvasElement;
@@ -94,6 +95,7 @@ const testNormal = new Texture({
 })
 testNormal.ready = true
 const glowMat = new MeshBasicMaterial({ color: [5, 4, 3] })
+planeMat.normalMap = concreteNormalMap
 const plane = new Mesh(planeGeo, planeMat)
 plane.position = [0, 0, 0]
 plane.scale = [10, 10, 10]
@@ -110,9 +112,18 @@ const gui = new GUI({
   autoPlace: true
 })
 const obj = {
-  showNormalMap: false,
+  showNormalMap: true,
   rotateZ: 0,
-  normalScale: 0.5
+  normalScale: 0.5,
+  uLightIntensity: 0.3,
+  uIntensity: 0.8,
+  uToneMap: 0,
+  uExposure: 1,
+  bloomType: 0,
+  uThreshold: 1.0,
+  uSoftKnee: 0.5,
+  uSigma: 1.5,
+  uRadius: 1.5
 }
 
 gui.add(obj, 'showNormalMap', [true, false]).onChange(val => {
@@ -139,24 +150,44 @@ gui.add(lightPos, 'y', -5, 5, 0.01).onChange(val => {
 gui.add(lightPos, 'z', -5, 5, 0.01).onChange(val => {
   directionalLight.position[2] = val
 })
-/* gsap.fromTo(
-  lightPos,
-  { x: 4, y: 0, z: 5 },
-  {
-    x: -4,
-    duration: 4,
-    repeat: -1,
-    yoyo: true,
-    onUpdate: () => {
-      directionalLight.position[0] = lightPos.x
-      directionalLight.position[1] = lightPos.y
-      directionalLight.position[2] = lightPos.z
-    },
-  },
-) */
 
+
+
+const scene = [directionalLight, ambientLight, plane]
+const effectComposer = new EffectComposer(renderer)
+const renderPass = new RenderPass(renderer, scene, camera)
+effectComposer.addPass(renderPass)
+const bloomPass = new BloomPass()
+effectComposer.addPass(bloomPass)
+const outputPass = new OutputPass()
+effectComposer.addPass(outputPass)
+
+
+gui.add(obj, 'uIntensity', 0, 1, 0.1).name("辉光强度").onChange(val => {
+  outputPass.material.uniforms.uIntensity = val
+})
+gui.add(obj, "uToneMap", [0, 1, 2, 3]).name("色调映射").onChange(val => {
+  outputPass.material.uniforms.uToneMap = val
+})
+gui.add(obj, "uExposure", 0, 10, 0.1).name("曝光度").onChange(val => {
+  outputPass.material.uniforms.uExposure = val
+})
+
+gui.add(obj, 'uThreshold', 0, 10, 0.001).name("辉光阈值").onChange(val => {
+  bloomPass.material.uniforms.uThreshold = val
+})
+gui.add(obj, 'uSoftKnee', 0, 1, 0.01).name("软膝").onChange(val => {
+  bloomPass.material.uniforms.uSoftKnee = val
+})
+gui.add(obj, 'uSigma', 0.5, 10, 0.01).name("模糊sigma").onChange(val => {
+  bloomPass.material.uniforms.uSigma = val
+})
+gui.add(obj, 'uRadius', 0.5, 10, 0.01).name("模糊uRadius").onChange(val => {
+  bloomPass.material.uniforms.uRadius = val
+})
 function render() {
-  renderer.render([directionalLight, ambientLight, plane], camera)
+  // renderer.render(scene, camera)
+  effectComposer.render()
   requestAnimationFrame(render)
 }
 render()

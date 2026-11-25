@@ -36,21 +36,6 @@ export class Renderer {
     scene!: Object3D[]
     time!: number
     private startTime: number
-    renderTarget: RenderTarget
-    postProcessMaterial: PostProcessMaterial
-    compositeMaterial: CompositeMaterial
-    emptyVBO: WebGLVertexArrayObject
-
-    pingRT: RenderTarget
-    pongRT: RenderTarget
-    private bloomTex!: WebGLTexture
-
-    mip1A: RenderTarget
-    mip1B: RenderTarget
-    mip2A: RenderTarget
-    mip2B: RenderTarget
-
-    bloomType: 0 | 1 = 0
     constructor(params: RendererParamType) {
         if (!params.el) {
             params.el = document.createElement("canvas")
@@ -65,278 +50,12 @@ export class Renderer {
             console.warn('[Renderer] EXT_color_buffer_float 不可用，将回退 LDR')
         }
         this.startTime = performance.now()
-        this.emptyVBO = this.gl.createVertexArray()
-        this.renderTarget = new RenderTarget(this.gl, this.gl.drawingBufferWidth, this.gl.drawingBufferHeight, 'rgba16f')
-        this.postProcessMaterial = new PostProcessMaterial({})
-        this.postProcessMaterial.effect = "none"
-        this.postProcessMaterial.initShader(this.gl)
-        this.compositeMaterial = new CompositeMaterial({})
-        this.compositeMaterial.initShader(this.gl)
 
-        const hw = Math.floor(this.gl.drawingBufferWidth / 2)
-        const hh = Math.floor(this.gl.drawingBufferHeight / 2)
-        this.pingRT = new RenderTarget(this.gl, hw, hh, 'rgba16f')
-        this.pongRT = new RenderTarget(this.gl, hw, hh, 'rgba16f')
-
-        this.mip1A = new RenderTarget(this.gl, hw / 2, hh / 2, 'rgba16f')
-        this.mip1B = new RenderTarget(this.gl, hw / 2, hh / 2, 'rgba16f')
-
-        this.mip2A = new RenderTarget(this.gl, hw / 4, hh / 4, 'rgba16f')
-        this.mip2B = new RenderTarget(this.gl, hw / 4, hh / 4, 'rgba16f')
     }
     render(list: Object3D[], camera: Camera) {
         this.time = performance.now() - this.startTime
         this.camera = camera
         this.scene = list
-        // this.clearTextureUnits()
-
-        this.renderTarget.bind(this.gl)
-        this.gl.enable(this.gl.DEPTH_TEST)
-        this._render()
-
-        this.renderTarget.unbind(this.gl)
-
-        if (this.bloomType == 0)
-            this.runBloom(3)
-        else
-            this.runBloomDownSample()
-        this.composite()
-
-    }
-    private runPass(opt: {
-        target: RenderTarget | null,
-        material: Material,
-        inputs: PassInputs[],
-        clear?: boolean
-    }) {
-        const { target, material, inputs, clear = true } = opt
-        if (target) {
-            target.bind(this.gl)
-        } else {
-            this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null)
-            this.gl.viewport(0, 0, this.gl.drawingBufferWidth, this.gl.drawingBufferHeight)
-        }
-        this.gl.disable(this.gl.DEPTH_TEST)
-        this.gl.clearColor(0, 0, 0, 1)
-        this.gl.disable(this.gl.CULL_FACE)
-        if (clear) this.gl.clear(this.gl.COLOR_BUFFER_BIT)
-        this.gl.useProgram(material.program)
-        this.gl.bindVertexArray(this.emptyVBO)
-        for (let i = 0; i < inputs.length; i++) {
-            const element = inputs[i];
-            this.gl.activeTexture(this.gl.TEXTURE0 + element.unit)
-            this.gl.bindTexture(this.gl.TEXTURE_2D, element.tex)
-        }
-        material.uploadUniforms(this.gl)
-        this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4)
-        this.gl.bindVertexArray(null)
-        // 解绑
-        for (let i = 0; i < inputs.length; i++) {
-            const element = inputs[i];
-            this.gl.activeTexture(this.gl.TEXTURE0 + element.unit)
-            this.gl.bindTexture(this.gl.TEXTURE_2D, null)
-        }
-    }
-    private runBloom(iteration = 2) {
-        const pm = this.postProcessMaterial
-        const pingRt = this.pingRT
-        const pongRt = this.pongRT
-        // 亮度提取
-        pm.uniforms.uTime = this.time / 1000           // 秒
-        pm.effect = "bright"
-        pm.uniforms.uEffect = EFFECT_MAP[pm.effect]
-        pm.uniforms.uResolution = [pingRt.width, pingRt.height]
-
-        // 提取亮部
-        this.runPass({
-            material: pm,
-            target: pingRt,
-            inputs: [
-                {
-                    tex: this.renderTarget.colorTex,
-                    unit: 0
-                }
-            ]
-        })
-
-        // 多次分离高斯模糊
-        let src = pingRt, dst = pongRt;
-        for (let i = 0; i < iteration; i++) {
-            // 水平模糊
-            pm.effect = 'blurH'
-            pm.uniforms.uEffect = EFFECT_MAP[pm.effect];
-            pm.uniforms.uResolution = [dst.width, dst.height]
-            this.runPass({
-                material: pm,
-                target: dst,
-                inputs: [
-                    {
-                        tex: src.colorTex,
-                        unit: 0
-                    }
-                ]
-            });
-            [src, dst] = [dst, src];
-            pm.effect = 'blurV'
-            pm.uniforms.uEffect = EFFECT_MAP[pm.effect];
-            pm.uniforms.uResolution = [dst.width, dst.height]
-            this.runPass({
-                material: pm,
-                target: dst,
-                inputs: [
-                    {
-                        tex: src.colorTex,
-                        unit: 0
-                    }
-                ]
-            });
-            [src, dst] = [dst, src];
-        }
-
-        this.bloomTex = src.colorTex
-
-
-
-    }
-    private runBloomDownSample() {
-        const pm = this.postProcessMaterial
-        const pingRt = this.pingRT
-        const pongRt = this.pongRT
-        // 亮度提取
-        pm.uniforms.uTime = this.time / 1000           // 秒
-        pm.effect = "bright"
-        pm.uniforms.uEffect = EFFECT_MAP[pm.effect]
-        pm.uniforms.uResolution = [pingRt.width, pingRt.height]
-
-        // 提取亮部
-        this.runPass({
-            material: pm,
-            target: pingRt,
-            inputs: [
-                {
-                    tex: this.renderTarget.colorTex,
-                    unit: 0
-                }
-            ]
-        })
-        // pingRT->blurH->pongRT->blurV->pingRT :第一级模糊
-        this.runBlur(pingRt, pongRt)
-        // pingRT->降采样->mip1A
-        this.downsample(pingRt, this.mip1A, pm)
-        // mip1A->blurH->mip1B->blurV->mip1A :第二级
-        this.runBlur(this.mip1A, this.mip1B)
-        // mip1A->降采样mip2A
-        this.downsample(this.mip1A, this.mip2A, pm)
-        // mip2A->blurH->mip2B->blurV->mipA:第三级
-        this.runBlur(this.mip2A, this.mip2B)
-        // 开启混合，渲染小的mip到大的mip上
-        pm.effect = "none"
-        pm.uniforms.uEffect = EFFECT_MAP[pm.effect]
-        this.gl.enable(this.gl.BLEND)
-        this.gl.blendFunc(this.gl.ONE, this.gl.ONE)
-
-        // mip2A->mip1A
-        this.runPass({
-            target: this.mip1A,
-            material: pm,
-            inputs: [
-                {
-                    unit: 0,
-                    tex: this.mip2A.colorTex
-                }
-            ],
-            clear: false
-        })
-        // mip1A->pingRT
-        this.runPass({
-            target: pingRt,
-            material: pm,
-            inputs: [
-                {
-                    unit: 0,
-                    tex: this.mip1A.colorTex
-                }
-            ],
-            clear: false
-        })
-        this.gl.disable(this.gl.BLEND)
-        // bloomTex=pingRT.colorTex
-        this.bloomTex = pingRt.colorTex
-    }
-    private downsample(src: RenderTarget, dst: RenderTarget, mat: PostProcessMaterial) {
-        dst.bind(this.gl)
-        mat.effect = "none"
-        mat.uniforms.uEffect = EFFECT_MAP[mat.effect]
-        this.gl.clear(this.gl.COLOR_BUFFER_BIT)
-        this.gl.useProgram(mat.program)
-        mat.uploadUniforms(this.gl)
-        this.gl.activeTexture(this.gl.TEXTURE0)
-        this.gl.bindTexture(this.gl.TEXTURE_2D, src.colorTex)
-        this.gl.bindVertexArray(this.emptyVBO)
-        this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4)
-        this.gl.bindVertexArray(null)
-
-        this.gl.activeTexture(this.gl.TEXTURE0)
-        this.gl.bindTexture(this.gl.TEXTURE_2D, null)
-    }
-    private runBlur(src: RenderTarget, dst: RenderTarget) {
-        const pm = this.postProcessMaterial
-        pm.effect = "blurH"
-        pm.uniforms.uEffect = EFFECT_MAP[pm.effect]
-        pm.uniforms.uResolution = [dst.width, dst.height]
-        this.runPass({
-            target: dst,
-            material: pm,
-            inputs: [
-                {
-                    tex: src.colorTex,
-                    unit: 0
-                }
-            ]
-        });
-        [dst, src] = [src, dst]
-        pm.effect = 'blurV'
-        pm.uniforms.uEffect = EFFECT_MAP[pm.effect]
-        pm.uniforms.uResolution = [dst.width, dst.height]
-        this.runPass({
-            target: dst,
-            material: pm,
-            inputs: [
-                {
-                    tex: src.colorTex,
-                    unit: 0
-                }
-            ]
-        });
-    }
-
-    private composite() {
-        this.runPass(
-            {
-                target: null,
-                material: this.compositeMaterial,
-                inputs: [
-                    {
-                        tex: this.renderTarget.colorTex,
-                        unit: 0
-                    },
-                    {
-                        tex: this.bloomTex,
-                        unit: 1
-                    }
-                ]
-            }
-        )
-    }
-
-
-    private clearTextureUnits() {
-        for (let i = 0; i < 8; i++) {
-            this.gl.activeTexture(this.gl.TEXTURE0 + i)
-            this.gl.bindTexture(this.gl.TEXTURE_2D, null)
-        }
-    }
-    private async _render() {
         this.gl.clearColor(0, 0, 0, 1)
         this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT)
         this.gl.enable(this.gl.CULL_FACE)
@@ -373,7 +92,14 @@ export class Renderer {
                 this.renderMesh(mesh)
             }
         }
-        // requestAnimationFrame(() => this._render())
+        this.clearTextureUnits()
+    }
+
+    private clearTextureUnits() {
+        for (let i = 0; i < 8; i++) {
+            this.gl.activeTexture(this.gl.TEXTURE0 + i)
+            this.gl.bindTexture(this.gl.TEXTURE_2D, null)
+        }
     }
 
 

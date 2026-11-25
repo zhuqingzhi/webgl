@@ -51,4 +51,9 @@ export class RenderTarget {
         gl.bindFramebuffer(gl.FRAMEBUFFER, null)
         gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight)
     }
+    setSize(gl: WebGL2RenderingContext, width: number, height: number) {
+        this.width = width
+        this.height = height
+        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight)
+    }
 }
