@@ -155,7 +155,7 @@ gui.add(lightPos, 'z', -5, 5, 0.01).onChange(val => {
 
 const scene = [directionalLight, ambientLight, plane]
 const effectComposer = new EffectComposer(renderer)
-const renderPass = new RenderPass(renderer, scene, camera)
+const renderPass = new RenderPass(scene, camera)
 effectComposer.addPass(renderPass)
 const bloomPass = new BloomPass()
 effectComposer.addPass(bloomPass)
@@ -164,13 +164,13 @@ effectComposer.addPass(outputPass)
 
 
 gui.add(obj, 'uIntensity', 0, 1, 0.1).name("辉光强度").onChange(val => {
-  outputPass.material.uniforms.uIntensity = val
+  bloomPass.compositeMaterial.uniforms.uIntensity = val
 })
 gui.add(obj, "uToneMap", [0, 1, 2, 3]).name("色调映射").onChange(val => {
-  outputPass.material.uniforms.uToneMap = val
+  bloomPass.compositeMaterial.uniforms.uToneMap = val
 })
 gui.add(obj, "uExposure", 0, 10, 0.1).name("曝光度").onChange(val => {
-  outputPass.material.uniforms.uExposure = val
+  bloomPass.compositeMaterial.uniforms.uExposure = val
 })
 
 gui.add(obj, 'uThreshold', 0, 10, 0.001).name("辉光阈值").onChange(val => {

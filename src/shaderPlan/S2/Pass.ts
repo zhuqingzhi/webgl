@@ -8,6 +8,7 @@ export interface PassContext {
     readBuffer: RenderTarget
     writeBuffer: RenderTarget | null
     textures: Map<string, WebGLTexture>
+    renderer: Renderer
 }
 type PassInputs = {
     tex: WebGLTexture,
@@ -67,7 +68,6 @@ export class RenderPass extends Pass {
     needsSwap: boolean = true
 
     constructor(
-        private renderer: Renderer,
         private scene: Object3D[],
         private camera: Camera
     ) {
@@ -80,13 +80,12 @@ export class RenderPass extends Pass {
         material.effect = "none"
         material.initShader(this.gl)
         this.material = material
-        this.renderTarget = new RenderTarget(gl, gl.drawingBufferWidth, gl.drawingBufferHeight, 'rgba16f')
     }
     render(ctx: PassContext): void {
         if (ctx.writeBuffer === null) return
         ctx.writeBuffer.bind(this.gl)
         this.gl.enable(this.gl.DEPTH_TEST)
-        this.renderer.render(this.scene, this.camera)
+        ctx.renderer.render(this.scene, this.camera)
         ctx.writeBuffer.unbind(this.gl)
     }
     setSize(width: number, height: number): void {
@@ -97,6 +96,7 @@ export class RenderPass extends Pass {
 export class BloomPass extends Pass {
     enabled: boolean = true
     needsSwap: boolean = true
+    compositeMaterial!: CompositeMaterial
     mip0A!: RenderTarget
     mip0B!: RenderTarget
     mip1A!: RenderTarget
@@ -105,7 +105,6 @@ export class BloomPass extends Pass {
     mip2B!: RenderTarget
     constructor() {
         super()
-        this.material = new PostProcessMaterial({})
     }
     render(ctx: PassContext): void {
         let { readBuffer, writeBuffer } = ctx;
@@ -143,7 +142,6 @@ export class BloomPass extends Pass {
         pm.uniforms.uEffect = EFFECT_MAP[pm.effect]
         this.gl.enable(this.gl.BLEND)
         this.gl.blendFunc(this.gl.ONE, this.gl.ONE)
-
         // mip2A->mip1A
         super.run({
             target: this.mip1A,
@@ -156,13 +154,18 @@ export class BloomPass extends Pass {
             ],
             clear: false
         })
+
         // mip1A->pingRT
         super.run({
             target: ctx.writeBuffer,
-            material: pm,
+            material: this.compositeMaterial,
             inputs: [
                 {
                     unit: 0,
+                    tex: ctx.readBuffer.colorTex
+                },
+                {
+                    unit: 1,
                     tex: this.mip1A.colorTex
                 }
             ],
@@ -218,10 +221,20 @@ export class BloomPass extends Pass {
         });
     }
     setSize(width: number, height: number): void {
-
+        const w = Math.floor(width)
+        const h = Math.floor(height)
+        this.mip0A.setSize(this.gl, w / 2, h / 2)
+        this.mip0B.setSize(this.gl, w / 2, h / 2)
+        this.mip1A.setSize(this.gl, w / 4, h / 4)
+        this.mip1B.setSize(this.gl, w / 4, h / 4)
+        this.mip2A.setSize(this.gl, w / 8, h / 8)
+        this.mip2B.setSize(this.gl, w / 8, h / 8)
     }
     init(gl: WebGL2RenderingContext): void {
         super.init(gl)
+        const compositeMaterial = new CompositeMaterial({})
+        this.compositeMaterial = compositeMaterial
+        this.compositeMaterial.initShader(gl)
         const material = new PostProcessMaterial({})
         material.effect = 'bright'
         material.uniforms.uEffect = EFFECT_MAP[material.effect]
@@ -246,7 +259,7 @@ export class OutputPass extends Pass {
 
     render(ctx: PassContext): void {
         super.run({
-            target: null,
+            target: ctx.writeBuffer,
             inputs: [
                 {
                     tex: ctx.readBuffer.colorTex,
@@ -262,7 +275,10 @@ export class OutputPass extends Pass {
     }
     init(gl: WebGL2RenderingContext): void {
         super.init(gl)
-        this.material = new CompositeMaterial({})
+        const material = new PostProcessMaterial({})
+        material.effect = 'none'
+        material.uniforms.uEffect = EFFECT_MAP[material.effect]
+        this.material = material
         this.material.initShader(gl)
     }
 }
@@ -292,14 +308,20 @@ export class EffectComposer {
             const element = this.passes[index]
             if (!element?.enabled) continue
             element.render({
-                writeBuffer: index === this.passes.length ? null : this.writeBuffer,
+                writeBuffer: index === this.passes.length - 1 ? null : this.writeBuffer,
                 readBuffer: this.readBuffer,
-                textures
+                textures,
+                renderer: this.renderer
             })
             if (element.needsSwap) this.swapBuffer()
         }
     }
     swapBuffer() {
         [this.readBuffer, this.writeBuffer] = [this.writeBuffer, this.readBuffer]
+    }
+    setSize(width: number, height: number) {
+        this.renderTarget1.setSize(this.gl, width, height)
+        this.renderTarget2.setSize(this.gl, width, height)
+        for (const p of this.passes) p.setSize(width, height)
     }
 }
