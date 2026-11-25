@@ -285,20 +285,12 @@ export class EffectComposer {
         pass.init(this.gl)
         this.passes.push(pass)
     }
-    reOrder() {
-        // 排序
-        const renderPassIndex = this.passes.findIndex(item => item instanceof RenderPass)
-        const outputPassIndex = this.passes.findIndex(item => item instanceof OutputPass)
-        if (!renderPassIndex) console.error("renderPass未配置")
-        if (!outputPassIndex) console.error("outputPass未配置");
-        [this.passes[0], this.passes[renderPassIndex]] = [this.passes[renderPassIndex], this.passes[0]];
-        [this.passes[this.passes.length - 1], this.passes[outputPassIndex]] = [this.passes[outputPassIndex], this.passes[this.passes.length - 1]]
-    }
+
     render() {
         const textures = new Map()
         for (let index = 0; index < this.passes.length; index++) {
             const element = this.passes[index]
-            if (!element.enabled) continue
+            if (!element?.enabled) continue
             element.render({
                 writeBuffer: index === this.passes.length ? null : this.writeBuffer,
                 readBuffer: this.readBuffer,
