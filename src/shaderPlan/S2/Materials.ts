@@ -721,7 +721,19 @@ export class MeshStandardMaterial extends Material {
                 Lo += (diffuse + specular) * radiance * NdotL;
             }
             
-            vec3 ambient = albedo * uAmbientColor * (1.0 - metallic);   // 简化版
+            // vec3 ambient = albedo * uAmbientColor * (1.0 - metallic);
+
+            float NdotV_amb = max(dot(N, V), 0.0);
+            vec3 F_amb = fresnelSchlick(NdotV_amb, F0);      // ← 用 NdotV，不是 NdotH
+            vec3 kD_amb = (vec3(1.0) - F_amb) * (1.0 - metallic);
+
+            // 漫反射环境：常量 irradiance 近似
+            vec3 diffuseEnv = kD_amb * albedo * uAmbientColor;
+
+            // 镜面环境：常量色 + 粗糙度衰减（D3 换成预过滤 cubemap）
+            vec3 specularEnv = F_amb * uAmbientColor * (1.0 - roughness * 0.7);
+
+            vec3 ambient = diffuseEnv + specularEnv;
             fragColor = vec4(ambient + Lo, 1.0);
 
         }

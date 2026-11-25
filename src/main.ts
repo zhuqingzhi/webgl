@@ -106,7 +106,7 @@ const target = new Object3D()
 target.position = [0, 0, 0]
 directionalLight.target = target
 
-const ambientLight = new AmbientLight([1, 1, 1,], 0.1)
+const ambientLight = new AmbientLight([1, 1, 1,], 0.3)
 
 const gui = new GUI({
   autoPlace: true

@@ -167,6 +167,7 @@ export class BloomPass extends Pass {
             clear: false
         })
         // mip0A->pingRT
+        this.gl.disable(this.gl.BLEND)
         super.run({
             target: ctx.writeBuffer,
             material: this.compositeMaterial,
@@ -180,9 +181,8 @@ export class BloomPass extends Pass {
                     tex: this.mip0A.colorTex
                 }
             ],
-            clear: false
+            clear: true
         })
-        this.gl.disable(this.gl.BLEND)
 
     }
     private downsample(src: RenderTarget, dst: RenderTarget, mat: PostProcessMaterial) {
