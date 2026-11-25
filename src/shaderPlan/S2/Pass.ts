@@ -284,6 +284,7 @@ export class EffectComposer {
     addPass(pass: Pass) {
         pass.init(this.gl)
         this.passes.push(pass)
+        this.reOrder()
     }
     reOrder() {
         // 排序
@@ -298,7 +299,7 @@ export class EffectComposer {
         const textures = new Map()
         for (let index = 0; index < this.passes.length; index++) {
             const element = this.passes[index]
-            if (!element.enabled) continue
+            if (!element?.enabled) continue
             element.render({
                 writeBuffer: index === this.passes.length ? null : this.writeBuffer,
                 readBuffer: this.readBuffer,
