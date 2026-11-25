@@ -154,8 +154,19 @@ export class BloomPass extends Pass {
             ],
             clear: false
         })
-
-        // mip1A->pingRT
+        // mip1A->mip0A
+        super.run({
+            target: this.mip0A,
+            material: pm,
+            inputs: [
+                {
+                    unit: 0,
+                    tex: this.mip1A.colorTex
+                },
+            ],
+            clear: false
+        })
+        // mip0A->pingRT
         super.run({
             target: ctx.writeBuffer,
             material: this.compositeMaterial,
@@ -166,7 +177,7 @@ export class BloomPass extends Pass {
                 },
                 {
                     unit: 1,
-                    tex: this.mip1A.colorTex
+                    tex: this.mip0A.colorTex
                 }
             ],
             clear: false
