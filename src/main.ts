@@ -115,17 +115,33 @@ const obj = {
   showNormalMap: true,
   rotateZ: 0,
   normalScale: 0.5,
+  envMap: false
 }
+
+
+const cubeMap = new CubeTexture({
+  // faces: createDebugCubemap(),
+  faces: createSkyCubemap(),
+  size: 64,
+})
+const sphereParam = createSphere(5, 30, 30)
+const sphereGeo = new Geometry(sphereParam)
+const sphereMat1 = new MeshStandardMaterial({
+  procedural: 'none', map: concrete, color: [1, 1, 1],
+  metallic: 0,
+  roughness: 0.9,
+})
+sphereMat1.envMap = cubeMap
 
 gui.add(obj, 'showNormalMap', [true, false]).onChange(val => {
   if (val) {
-    planeMat.normalMap = concreteNormalMap
+    sphereMat1.normalMap = concreteNormalMap
   } else {
-    planeMat.normalMap = undefined
+    sphereMat1.normalMap = undefined
   }
 })
 gui.add(obj, "normalScale", 0, 5, 0.01).onChange(val => {
-  planeMat.normalScale = val
+  sphereMat1.normalScale = val
 })
 // 加一个绕 Z 轴旋转的控制
 gui.add(obj, 'rotateZ', -Math.PI, Math.PI, 0.01).onChange(v => {
@@ -142,20 +158,15 @@ gui.add(lightPos, 'z', -5, 5, 0.01).onChange(val => {
   directionalLight.position[2] = val
 })
 
-const sphereParam = createSphere(1, 30, 30)
-const sphereGeo = new Geometry(sphereParam)
-const sphereMat1 = new MeshStandardMaterial({
-  procedural: 'none', map: concrete, color: [1, 1, 1],
-  metallic: 0,
-  roughness: 0.9
+gui.add(obj, 'envMap', [true, false]).onChange(val => {
+  if (val) {
+    sphereMat1.envMap = cubeMap
+  } else {
+    sphereMat1.envMap = undefined
+  }
 })
 
-const cubeMap = new CubeTexture({
-  // faces: createDebugCubemap(),
-  faces: createSkyCubemap(),
-  size: 64,
-})
-sphereMat1.envMap = cubeMap
+
 
 
 const sphere1 = new Mesh(sphereGeo, sphereMat1)

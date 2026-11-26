@@ -742,7 +742,7 @@ export class MeshStandardMaterial extends Material {
                 // 镜面：用R方向采样
                 vec3 prefiltered=texture(uEnvMap,R).rgb;
                 vec3 specularEnv=prefiltered*(F0*0.9+0.1);
-
+                diffuseEnv = kD_amb * albedo * irradiance;  
                 ambient=diffuseEnv+specularEnv;
             }else{
                  // 漫反射环境：常量 irradiance 近似
