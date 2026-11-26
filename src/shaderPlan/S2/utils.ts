@@ -273,3 +273,90 @@ export function isArrayBufferView(
 ): image is ArrayBufferView {
     return ArrayBuffer.isView(image)
 }
+
+// src/shaderPlan/S2/utils.ts 里加
+
+function faceToDirection(face: number, s: number, t: number): [number, number, number] {
+    switch (face) {
+        case 0: return [1, -t, -s]   // +X
+        case 1: return [-1, -t, s]   // -X
+        case 2: return [s, 1, t]   // +Y
+        case 3: return [s, -1, -t]   // -Y
+        case 4: return [s, -t, 1]   // +Z
+        case 5: return [-s, -t, -1]   // -Z
+        default: return [0, 0, 1]
+    }
+}
+
+function skyColor(dir: [number, number, number]): [number, number, number] {
+    const [x, y, z] = dir
+    const len = Math.hypot(x, y, z) || 1
+    const ny = y / len              // -1（正下方）到 +1（正上方）
+
+    if (ny >= 0) {
+        // 天空：地平线浅白蓝 → 天顶深蓝
+        const k = Math.pow(ny, 0.5)
+        return [
+            0.75 + (0.15 - 0.75) * k,
+            0.85 + (0.35 - 0.85) * k,
+            0.95 + (0.90 - 0.95) * k,
+        ]
+    } else {
+        // 地面：地平线浅白蓝 → 地下褐
+        const k = Math.pow(-ny, 0.5)
+        return [
+            0.75 + (0.30 - 0.75) * k,
+            0.85 + (0.22 - 0.85) * k,
+            0.95 + (0.15 - 0.95) * k,
+        ]
+    }
+}
+
+export function createSkyCubemap(size = 64): Uint8Array[] {
+    const faces: Uint8Array[] = []
+
+    for (let face = 0; face < 6; face++) {
+        const data = new Uint8Array(size * size * 4)
+
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                // 像素 → 面内坐标 [-1, 1]
+                const s = ((x + 0.5) / size) * 2 - 1
+                const t = ((y + 0.5) / size) * 2 - 1
+
+                const dir = faceToDirection(face, s, t)
+                const c = skyColor(dir)
+
+                const i = (y * size + x) * 4
+                data[i] = Math.round(c[0] * 255)
+                data[i + 1] = Math.round(c[1] * 255)
+                data[i + 2] = Math.round(c[2] * 255)
+                data[i + 3] = 255
+            }
+        }
+        faces.push(data)
+    }
+    return faces
+}
+
+const DEBUG_COLORS = [
+    [255, 0, 0],     // +X 红
+    [0, 255, 0],     // -X 绿
+    [0, 0, 255],     // +Y 蓝
+    [255, 255, 0],   // -Y 黄
+    [255, 0, 255],   // +Z 品红
+    [0, 255, 255],   // -Z 青
+]
+
+export function createDebugCubemap(size = 64): Uint8Array[] {
+    return DEBUG_COLORS.map(c => {
+        const data = new Uint8Array(size * size * 4)
+        for (let i = 0; i < size * size; i++) {
+            data[i * 4] = c[0]
+            data[i * 4 + 1] = c[1]
+            data[i * 4 + 2] = c[2]
+            data[i * 4 + 3] = 255
+        }
+        return data
+    })
+}

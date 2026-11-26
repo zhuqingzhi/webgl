@@ -1,8 +1,8 @@
 import { Geometry, Mesh, Object3D, PerspectiveCamera, } from "./shaderPlan/S2/D5"
-import { createCheckerCanvas, createNormalMapCanvas, createPlane, createSphere, createWavePlane, createWhiteCanvas } from "./shaderPlan/S2/utils"
+import { createCheckerCanvas, createDebugCubemap, createNormalMapCanvas, createPlane, createSkyCubemap, createSphere, createWavePlane, createWhiteCanvas } from "./shaderPlan/S2/utils"
 import { MeshBasicMaterial, MeshPhongMaterial, MeshStandardMaterial, type PostEffectType } from "./shaderPlan/S2/Materials"
 import { TextureLoader } from "./shaderPlan/S2/Loader";
-import { Texture } from "./shaderPlan/S2/Textures";
+import { CubeTexture, Texture } from "./shaderPlan/S2/Textures";
 import { Renderer } from "./shaderPlan/S2/Renderer";
 import { AmbientLight, DirectionalLight, SpotLight } from "./shaderPlan/S2/Light";
 import GUI from "three/examples/jsm/libs/lil-gui.module.min.js";
@@ -149,41 +149,31 @@ const sphereMat1 = new MeshStandardMaterial({
   metallic: 0,
   roughness: 0.9
 })
-const sphereMat2 = new MeshStandardMaterial({
-  metallic: 0, procedural: 'none', map: concrete, color: [1, 1, 1],
-  roughness: 0.1
+
+const cubeMap = new CubeTexture({
+  // faces: createDebugCubemap(),
+  faces: createSkyCubemap(),
+  size: 64,
 })
-const sphereMat3 = new MeshStandardMaterial({
-  metallic: 1, procedural: 'none', map: concrete, color: [1, 1, 1],
-  roughness: 0.2
-})
+sphereMat1.envMap = cubeMap
+
 
 const sphere1 = new Mesh(sphereGeo, sphereMat1)
 sphere1.position = [-2, 0, 0]
-const sphere2 = new Mesh(sphereGeo, sphereMat2)
-sphere2.position = [0, 0, 0]
 
-const sphere3 = new Mesh(sphereGeo, sphereMat3)
-sphere3.position = [2, 0, 0]
 
 const sphere1Folder = gui.addFolder('sphere1')
 sphere1Folder.add(sphereMat1, 'metallic', 0, 1, 0.01)
 sphere1Folder.add(sphereMat1, 'roughness', 0, 1, 0.01)
 
-const sphere2Folder = gui.addFolder('sphere2')
-sphere2Folder.add(sphereMat2, 'metallic', 0, 1, 0.01)
-sphere2Folder.add(sphereMat2, 'roughness', 0, 1, 0.01)
 
-const sphere3Folder = gui.addFolder('sphere3')
-sphere3Folder.add(sphereMat3, 'metallic', 0, 1, 0.01)
-sphere3Folder.add(sphereMat3, 'roughness', 0, 1, 0.01)
-const scene = [directionalLight, ambientLight, sphere1, sphere2, sphere3]
+
+const scene = [directionalLight, ambientLight, sphere1]
 const effectComposer = new EffectComposer(renderer)
 const renderPass = new RenderPass(scene, camera)
 effectComposer.addPass(renderPass)
 const outputPass = new OutputPass()
 effectComposer.addPass(outputPass)
-
 
 
 function render() {

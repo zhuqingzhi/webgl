@@ -197,17 +197,28 @@ export class Renderer {
             mat.map.init(this.gl, unit)
             mat.map.bind(this.gl, unit)
             mat.uniforms['uTexture'] = unit
+            mat.uniforms['uHasMap'] = true
             unit++
         } else {
-            mat.uniforms['uTexture'] = 0          // 兜底，避免 sampler 未绑定
+            mat.uniforms['uHasMap'] = false
+        }
+        if (mat.envMap) {
+            mat.envMap.init(this.gl, unit)
+            mat.envMap.bind(this.gl, unit)
+            mat.uniforms['uEnvMap'] = unit
+            mat.uniforms['uHasEnvMap'] = true
+            unit++
+        } else {
+            mat.uniforms['uHasEnvMap'] = false
         }
         if (mat.normalMap) {
             mat.normalMap.init(this.gl, unit)
             mat.normalMap.bind(this.gl, unit)
             mat.uniforms['uNormalMap'] = unit
+            mat.uniforms['uHasNormalMap'] = true
             unit++
         } else {
-            mat.uniforms['uNormalMap'] = 0        // 兜底指向 uTexture 所在单元
+            mat.uniforms['uHasNormalMap'] = false
         }
     }
     renderMesh(mesh: Mesh) {
