@@ -1,5 +1,5 @@
 import { Geometry, Mesh, Object3D, PerspectiveCamera, } from "./shaderPlan/S2/D5"
-import { createCheckerCanvas, createDebugCubemap, createNormalMapCanvas, createPlane, createSkyCubemap, createSphere, createWavePlane, createWhiteCanvas } from "./shaderPlan/S2/utils"
+import { createCheckerCanvas, createDebugCubemap, createIrradianceMap, createNormalMapCanvas, createPlane, createSkyCubemap, createSphere, createWavePlane, createWhiteCanvas } from "./shaderPlan/S2/utils"
 import { MeshBasicMaterial, MeshPhongMaterial, MeshStandardMaterial, type PostEffectType } from "./shaderPlan/S2/Materials"
 import { TextureLoader } from "./shaderPlan/S2/Loader";
 import { CubeTexture, Texture } from "./shaderPlan/S2/Textures";
@@ -7,7 +7,7 @@ import { Renderer } from "./shaderPlan/S2/Renderer";
 import { AmbientLight, DirectionalLight, SpotLight } from "./shaderPlan/S2/Light";
 import GUI from "three/examples/jsm/libs/lil-gui.module.min.js";
 import gsap from "gsap";
-import { BloomPass, EffectComposer, OutputPass, RenderPass } from "./shaderPlan/S2/Pass";
+import { BloomPass, EffectComposer, OutputPass, RenderPass, ShaderPass } from "./shaderPlan/S2/Pass";
 
 
 const canvas = document.getElementById("canvas")! as HTMLCanvasElement;
@@ -112,26 +112,31 @@ const gui = new GUI({
   autoPlace: true
 })
 const obj = {
-  showNormalMap: true,
+  showNormalMap: false,
   rotateZ: 0,
   normalScale: 0.5,
-  envMap: false
+  envMap: true,
+  showIrradianceMap: true
 }
-
+const sphereParam = createSphere(5, 30, 30)
+const sphereGeo = new Geometry(sphereParam)
+const sphereMat1 = new MeshStandardMaterial({
+  procedural: 'none', color: [1, 1, 1],
+  metallic: 0,
+  roughness: 0.9,
+})
 
 const cubeMap = new CubeTexture({
   // faces: createDebugCubemap(),
   faces: createSkyCubemap(),
   size: 64,
 })
-const sphereParam = createSphere(5, 30, 30)
-const sphereGeo = new Geometry(sphereParam)
-const sphereMat1 = new MeshStandardMaterial({
-  procedural: 'none', map: concrete, color: [1, 1, 1],
-  metallic: 0,
-  roughness: 0.9,
-})
+cubeMap.init(renderer.gl)
+
+const irradianceMap = createIrradianceMap(renderer.gl, cubeMap, cubeMap.size)
 sphereMat1.envMap = cubeMap
+sphereMat1.irradianceMap = irradianceMap.handle
+
 
 gui.add(obj, 'showNormalMap', [true, false]).onChange(val => {
   if (val) {
@@ -140,6 +145,15 @@ gui.add(obj, 'showNormalMap', [true, false]).onChange(val => {
     sphereMat1.normalMap = undefined
   }
 })
+
+gui.add(obj, 'showIrradianceMap', [true, false]).onChange(val => {
+  if (val) {
+    sphereMat1.irradianceMap = irradianceMap.handle
+  } else {
+    sphereMat1.irradianceMap = undefined
+  }
+})
+
 gui.add(obj, "normalScale", 0, 5, 0.01).onChange(val => {
   sphereMat1.normalScale = val
 })
@@ -183,6 +197,8 @@ const scene = [directionalLight, ambientLight, sphere1]
 const effectComposer = new EffectComposer(renderer)
 const renderPass = new RenderPass(scene, camera)
 effectComposer.addPass(renderPass)
+
+
 const outputPass = new OutputPass()
 effectComposer.addPass(outputPass)
 

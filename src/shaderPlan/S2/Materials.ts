@@ -40,9 +40,13 @@ export class Material {
         this.map = params.map
         this.syncUniforms()
     }
-    initShader(gl: WebGL2RenderingContext) {
+    initShader(gl: WebGL2RenderingContext): void
+    initShader(gl: WebGL2RenderingContext, vertexString: string, fragString: string): void
+    initShader(gl: WebGL2RenderingContext, vertexString?: string, fragString?: string) {
         if (this.program) return
         console.log('[initShader] 编译一次', this.constructor.name)
+        if (vertexString) this.vertexString = vertexString
+        if (fragString) this.fragmentString = fragString
         this.vertexShader = createShader(gl, this.vertexString, gl.VERTEX_SHADER)
         this.fragShader = createShader(gl, this.fragmentString, gl.FRAGMENT_SHADER)
         this.program = gl.createProgram()
@@ -520,6 +524,7 @@ type StandardMaterialType = {
     normalScale?: number
     metallic?: number
     roughness?: number
+    irradianceMap?: WebGLTexture
 }
 export class MeshStandardMaterial extends Material {
     vertexString = `#version 300 es
@@ -585,6 +590,7 @@ export class MeshStandardMaterial extends Material {
 
         uniform samplerCube uEnvMap;
         uniform bool uHasEnvMap;
+        uniform samplerCube uIrradianceMap;
 
         // ---- BRDF 三项 ----
         float distributionGGX(vec3 N, vec3 H, float roughness) {
@@ -738,12 +744,13 @@ export class MeshStandardMaterial extends Material {
             if(uHasEnvMap){
                 vec3 R=reflect(-V,N);
                 // 漫反射:用N方向采样
-                vec3 irradiance =texture(uEnvMap,N).rgb;
+                vec3 irradiance =texture(uIrradianceMap,N).rgb;
                 // 镜面：用R方向采样
                 vec3 prefiltered=texture(uEnvMap,R).rgb;
                 vec3 specularEnv=prefiltered*(F0*0.9+0.1);
                 diffuseEnv = kD_amb * albedo * irradiance;  
                 ambient=diffuseEnv+specularEnv;
+                // ambient=diffuseEnv+specularEnv;
             }else{
                  // 漫反射环境：常量 irradiance 近似
                 diffuseEnv = kD_amb * albedo * uAmbientColor;
@@ -764,6 +771,7 @@ export class MeshStandardMaterial extends Material {
     normalMap?: Texture
     procedural?: ProceduralType
     normalScale?: number
+    irradianceMap?: WebGLTexture
 
     constructor(params: MaterialParamsType & StandardMaterialType) {
         super(params)
@@ -773,6 +781,7 @@ export class MeshStandardMaterial extends Material {
         this.normalMap = params.normalMap
         this.procedural = params.procedural
         this.normalScale = params.normalScale ?? 1
+        this.irradianceMap = params.irradianceMap
     }
     syncUniforms(): void {
         super.syncUniforms()
@@ -782,6 +791,7 @@ export class MeshStandardMaterial extends Material {
         this.uniforms['uNormalScale'] = this.normalScale
         const PROC_MAP = { none: 0, checker: 1, wood: 2, marble: 3, cloud: 4 }
         this.uniforms.uProcedural = PROC_MAP[this.procedural ?? 'none']
+        this.uniforms.uHasEnvMap = !!(this.envMap && this.irradianceMap)
     }
 }
 

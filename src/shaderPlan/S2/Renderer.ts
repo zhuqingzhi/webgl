@@ -3,7 +3,7 @@ import { EFFECT_MAP, MAX_LIGHTS } from "./Constants"
 import type { Camera, Mesh, Object3D } from "./D5"
 import type { AmbientLight, DirectionalLight, SpotLight } from "./Light"
 import { colorToLinear, isMesh } from "./utils"
-import { CompositeMaterial, Material, PostProcessMaterial, type MeshPhongMaterial } from "./Materials"
+import { CompositeMaterial, Material, MeshStandardMaterial, PostProcessMaterial, type MeshPhongMaterial } from "./Materials"
 import { RenderTarget } from "./RenderTarget"
 
 type RendererParamType = {
@@ -190,36 +190,39 @@ export class Renderer {
     }
     private injectMaterialUniforms(mesh: Mesh) {
         mesh.material.syncUniforms()
-        const mat = mesh.material as MeshPhongMaterial
+        const mat = mesh.material as MeshStandardMaterial
         let unit = 0
 
         if (mat.map) {
             mat.map.init(this.gl, unit)
             mat.map.bind(this.gl, unit)
-            mat.uniforms['uTexture'] = unit
             mat.uniforms['uHasMap'] = true
-            unit++
         } else {
             mat.uniforms['uHasMap'] = false
         }
+        mat.uniforms['uTexture'] = unit++
+
         if (mat.envMap) {
             mat.envMap.init(this.gl, unit)
             mat.envMap.bind(this.gl, unit)
-            mat.uniforms['uEnvMap'] = unit
             mat.uniforms['uHasEnvMap'] = true
-            unit++
         } else {
             mat.uniforms['uHasEnvMap'] = false
         }
+        mat.uniforms['uEnvMap'] = unit++
+
+        this.gl.activeTexture(this.gl.TEXTURE0 + unit)
+        this.gl.bindTexture(this.gl.TEXTURE_CUBE_MAP, mat.irradianceMap ?? null)
+        mat.uniforms['uIrradianceMap'] = unit++
+
         if (mat.normalMap) {
             mat.normalMap.init(this.gl, unit)
             mat.normalMap.bind(this.gl, unit)
-            mat.uniforms['uNormalMap'] = unit
             mat.uniforms['uHasNormalMap'] = true
-            unit++
         } else {
             mat.uniforms['uHasNormalMap'] = false
         }
+        mat.uniforms['uNormalMap'] = unit++
     }
     renderMesh(mesh: Mesh) {
 

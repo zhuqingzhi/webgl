@@ -1,5 +1,8 @@
 import { vec3 } from "gl-matrix"
 import type { Mesh, Object3D } from "./D5"
+import type { CubeTexture } from "./Textures"
+import { Material } from "./Materials"
+import { CubeRenderTarget } from "./RenderTarget"
 
 export function createShader(gl: WebGL2RenderingContext, source: string, type: WebGLRenderingContextBase['VERTEX_SHADER'] | WebGLRenderingContextBase['FRAGMENT_SHADER']) {
     const shader = gl.createShader(type)
@@ -359,4 +362,114 @@ export function createDebugCubemap(size = 64): Uint8Array[] {
         }
         return data
     })
+}
+export const QuadVertexString = `#version 300 es
+void main(){
+    gl_Position=vec4(
+        float(gl_VertexID&1)*2.-1.,
+        float(gl_VertexID>>1)*2.-1.,
+        0,1
+    );
+}
+`
+export const irradFragString = `#version 300 es
+precision highp float;
+precision highp samplerCube;
+
+out vec4 fragColor;
+
+uniform samplerCube uEnvMap;
+uniform int uFaceIndex;
+uniform float uSampleDelta;
+
+const float PI=3.14159265359;
+
+// 面内uv->方向向量
+// 必须和 CPU 版 faceToDirection 完全一致
+vec3 faceToDirection(int face, vec2 uv) {
+    float s = uv.x * 2.0 - 1.0;
+    float t = uv.y * 2.0 - 1.0;
+
+    if (face == 0) return normalize(vec3( 1.0, -t, -s));
+    if (face == 1) return normalize(vec3(-1.0, -t,  s));
+    if (face == 2) return normalize(vec3(  s,  1.0,  t));
+    if (face == 3) return normalize(vec3(  s, -1.0, -t));
+    if (face == 4) return normalize(vec3(  s, -t,  1.0));
+    return normalize(vec3(-s, -t, -1.0));
+}
+
+// 从N构造切线空间
+void buildBasis(vec3 N,out vec3 T,out vec3 B){
+    vec3 up=abs(N.y)<0.999?vec3(0,1,0):vec3(1,0,0);
+    T=normalize(cross(up,N));
+    B=normalize(cross(N,T));
+}
+
+void main(){
+    // 当前像素在面内的uv
+    // 自动对应当前正在写的像素（不依赖顶点 UV）
+    // 画的是全屏 quad，直接屏幕空间推导最省事
+    // 少一个顶点属性/插值链路，避免 UV 传错
+    vec2 uv=gl_FragCoord.xy/float(textureSize(uEnvMap,0).x);
+    vec3 N=faceToDirection(uFaceIndex,uv);
+    
+    vec3 T,B;
+    buildBasis(N,T,B);
+
+    vec3 irradiance=vec3(0);
+    float nrSamples=0.;
+
+    for(float phi=0.;phi<2.0*PI;phi+=uSampleDelta){
+        for(float theta=0.;theta<0.5*PI;theta+=uSampleDelta){
+            //切线空间半球采样
+            float sinTheta=sin(theta);
+            float cosTheta=cos(theta);
+            float cosPhi=cos(phi);
+            float sinPhi=sin(phi);
+            vec3 tangentSample=vec3(sinTheta*cosPhi,sinTheta*sinPhi,cosTheta);
+            // 切线空间->世界空间
+            vec3 sampleVec=mat3(T,B,N)*tangentSample;
+
+            irradiance+=texture(uEnvMap,sampleVec).rgb*cosTheta*sinTheta;
+            nrSamples+=1.;
+        }
+    }
+    
+    irradiance=PI*irradiance/nrSamples;
+    fragColor=vec4(irradiance,1.);
+}
+`
+
+export function createIrradianceMap(gl: WebGL2RenderingContext, envMap: CubeTexture, size: number) {
+    const target = new CubeRenderTarget(size)
+    target.init(gl)
+    const material = new Material({})
+    material.initShader(gl, QuadVertexString, irradFragString)
+    material.uniforms['uEnvMap'] = 0;
+    material.uniforms['uSampleDelta'] = 0.025
+
+    const emptyVao = gl.createVertexArray()
+    gl.bindVertexArray(emptyVao)
+
+    envMap.init(gl)
+    envMap.bind(gl, 0)
+
+    gl.disable(gl.DEPTH_TEST)
+    gl.disable(gl.CULL_FACE)
+
+    gl.clearColor(0, 0, 0, 1)
+    for (let face = 0; face < 6; face++) {
+        target.bindFace(gl, face)
+        gl.clear(gl.COLOR_BUFFER_BIT)
+
+        gl.useProgram(material.program)
+        material.uniforms.uFaceIndex = face;
+        material.uploadUniforms(gl)
+
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+    }
+    gl.bindVertexArray(null)
+    target.unbind(gl)
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, null)
+    return target
 }

@@ -310,6 +310,36 @@ export class OutputPass extends Pass {
     }
 }
 
+export class ShaderPass extends Pass {
+    needsSwap: boolean = true
+    constructor(vertexString: string, fragString: string) {
+        super()
+        this.material = new Material({})
+        this.material.vertexString = vertexString
+        this.material.fragmentString = fragString
+    }
+    init(gl: WebGL2RenderingContext): void {
+        super.init(gl)
+        this.material.initShader(gl)
+    }
+    setSize(width: number, height: number): void {
+
+    }
+    render(ctx: PassContext): void {
+        super.run({
+            target: ctx.writeBuffer,
+            inputs: [
+                {
+                    tex: ctx.readBuffer.colorTex,
+                    unit: 0
+                }
+            ],
+            material: this.material,
+            clear: true
+        })
+    }
+}
+
 export class EffectComposer {
     readBuffer!: RenderTarget//始终指向下一阶段应该读取的结果
     writeBuffer!: RenderTarget//指向下一阶段应该写入的位置
