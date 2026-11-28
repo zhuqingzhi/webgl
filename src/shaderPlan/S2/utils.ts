@@ -381,6 +381,7 @@ out vec4 fragColor;
 uniform samplerCube uEnvMap;
 uniform int uFaceIndex;
 uniform float uSampleDelta;
+uniform float uTargetSize;
 
 const float PI=3.14159265359;
 
@@ -410,7 +411,7 @@ void main(){
     // 自动对应当前正在写的像素（不依赖顶点 UV）
     // 画的是全屏 quad，直接屏幕空间推导最省事
     // 少一个顶点属性/插值链路，避免 UV 传错
-    vec2 uv=gl_FragCoord.xy/float(textureSize(uEnvMap,0).x);
+    vec2 uv=gl_FragCoord.xy/uTargetSize;
     vec3 N=faceToDirection(uFaceIndex,uv);
     
     vec3 T,B;
@@ -447,6 +448,7 @@ export function createIrradianceMap(gl: WebGL2RenderingContext, envMap: CubeText
     material.initShader(gl, QuadVertexString, irradFragString)
     material.uniforms['uEnvMap'] = 0;
     material.uniforms['uSampleDelta'] = 0.025
+    material.uniforms['uTargetSize'] = size
 
     const emptyVao = gl.createVertexArray()
     gl.bindVertexArray(emptyVao)

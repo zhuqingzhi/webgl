@@ -72,6 +72,7 @@ export class CubeRenderTarget {
         }
         this.handle = gl.createTexture()
         gl.bindTexture(gl.TEXTURE_CUBE_MAP, this.handle)
+
         for (let i = 0; i < 6; i++) {
             gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, gl.RGBA16F, this.size, this.size, 0, gl.RGBA, gl.HALF_FLOAT, null)
         }
@@ -80,6 +81,7 @@ export class CubeRenderTarget {
         gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
         gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
         gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE)
+
         this.fbo = gl.createFramebuffer()
 
     }

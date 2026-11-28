@@ -1,8 +1,11 @@
+
 import { EFFECT_MAP } from "./Constants"
 import type { Camera, Object3D } from "./D5"
-import { CompositeMaterial, Material, PostProcessMaterial } from "./Materials"
+import { CompositeMaterial, Material, MeshStandardMaterial, PostProcessMaterial } from "./Materials"
 import type { Renderer } from "./Renderer"
 import { RenderTarget } from "./RenderTarget"
+import { CubeTexture } from "./Textures"
+import { createIrradianceMap, createSkyCubemap } from "./utils"
 
 export interface PassContext {
     readBuffer: RenderTarget
@@ -380,5 +383,86 @@ export class EffectComposer {
         this.renderTarget1.setSize(this.gl, width, height)
         this.renderTarget2.setSize(this.gl, width, height)
         for (const p of this.passes) p.setSize(width, height)
+    }
+}
+
+export class CubeMapPass extends Pass {
+    vertexString = `#version 300 es
+        void main(){
+            gl_Position=vec4(
+                float(gl_VertexID&1)*2.-1.,
+                float(gl_VertexID>>1)*2.-1.,
+                0,
+                1
+            );
+        }
+    `
+    fragString = `#version 300 es
+        precision highp float;
+        out vec4 fragColor;
+        uniform samplerCube uMap;
+        uniform int uFaceIndex;
+        uniform vec2 uResolution;
+
+        vec3 faceToDirection(int face, vec2 uv) {
+            float s = uv.x * 2.0 - 1.0;
+            float t = uv.y * 2.0 - 1.0;
+
+            if (face == 0) return normalize(vec3( 1.0, -t, -s));
+            if (face == 1) return normalize(vec3(-1.0, -t,  s));
+            if (face == 2) return normalize(vec3(  s,  1.0,  t));
+            if (face == 3) return normalize(vec3(  s, -1.0, -t));
+            if (face == 4) return normalize(vec3(  s, -t,  1.0));
+            return normalize(vec3(-s, -t, -1.0));
+        }
+
+        void main(){
+            vec2 uv=gl_FragCoord.xy/uResolution;
+            vec3 N=faceToDirection(uFaceIndex,uv);
+    
+            vec3 irradiance=texture(uMap,N).rgb;
+            fragColor=vec4(irradiance,1.);
+        }
+    `
+    needsSwap: boolean = true
+    private irradianceTexture!: WebGLTexture
+    init(gl: WebGL2RenderingContext): void {
+        super.init(gl)
+        const cubeMap = new CubeTexture({
+            faces: createSkyCubemap(),
+            size: 64,
+        })
+        cubeMap.init(gl)
+
+        const irradianceMap = createIrradianceMap(gl, cubeMap, 32)
+        this.irradianceTexture = irradianceMap.handle
+        const mat = new MeshStandardMaterial({
+            procedural: 'none', color: [1, 1, 1],
+            metallic: 0,
+            roughness: 0.9,
+        })
+        mat.irradianceMap = irradianceMap
+        this.material = mat
+
+        this.material.initShader(gl, this.vertexString, this.fragString)
+        this.material.uniforms.uSize = 32
+        this.material.uniforms.uFaceIndex = 0;
+        this.material.uniforms.uMap = 0;
+    }
+    render(ctx: PassContext): void {
+        this.gl.activeTexture(this.gl.TEXTURE0)
+        this.gl.bindTexture(this.gl.TEXTURE_CUBE_MAP, this.irradianceTexture)
+
+        this.material.uniforms.uResolution = [
+            ctx.writeBuffer.width,
+            ctx.writeBuffer.height,
+        ]
+
+        super.run({
+            target: ctx.writeBuffer,
+            material: this.material,
+            inputs: [],
+            clear: true,
+        })
     }
 }

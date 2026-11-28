@@ -205,23 +205,22 @@ export class Renderer {
         if (mat.envMap) {
             mat.envMap.init(this.gl, unit)
             mat.envMap.bind(this.gl, unit)
-            mat.uniforms['uHasEnvMap'] = true
-        } else {
-            mat.uniforms['uHasEnvMap'] = false
         }
         mat.uniforms['uEnvMap'] = unit++
+        mat.uniforms['uHasEnvMap'] = !!mat.envMap
 
-        this.gl.activeTexture(this.gl.TEXTURE0 + unit)
-        this.gl.bindTexture(this.gl.TEXTURE_CUBE_MAP, mat.irradianceMap ?? null)
+        if (!!mat.irradianceMap) {
+            this.gl.activeTexture(this.gl.TEXTURE0 + unit)
+            this.gl.bindTexture(this.gl.TEXTURE_CUBE_MAP, mat.irradianceMap)
+        }
+        mat.uniforms['uHasIrradianceMap'] = !!mat.irradianceMap
         mat.uniforms['uIrradianceMap'] = unit++
 
         if (mat.normalMap) {
             mat.normalMap.init(this.gl, unit)
             mat.normalMap.bind(this.gl, unit)
-            mat.uniforms['uHasNormalMap'] = true
-        } else {
-            mat.uniforms['uHasNormalMap'] = false
         }
+        mat.uniforms['uHasNormalMap'] = !!mat.normalMap
         mat.uniforms['uNormalMap'] = unit++
     }
     renderMesh(mesh: Mesh) {

@@ -7,7 +7,7 @@ import { Renderer } from "./shaderPlan/S2/Renderer";
 import { AmbientLight, DirectionalLight, SpotLight } from "./shaderPlan/S2/Light";
 import GUI from "three/examples/jsm/libs/lil-gui.module.min.js";
 import gsap from "gsap";
-import { BloomPass, EffectComposer, OutputPass, RenderPass, ShaderPass } from "./shaderPlan/S2/Pass";
+import { BloomPass, CubeMapPass, EffectComposer, OutputPass, RenderPass, ShaderPass } from "./shaderPlan/S2/Pass";
 
 
 const canvas = document.getElementById("canvas")! as HTMLCanvasElement;
@@ -116,7 +116,8 @@ const obj = {
   rotateZ: 0,
   normalScale: 0.5,
   envMap: true,
-  showIrradianceMap: true
+  showIrradianceMap: true,
+  faceIndex: 0
 }
 const sphereParam = createSphere(5, 30, 30)
 const sphereGeo = new Geometry(sphereParam)
@@ -133,7 +134,7 @@ const cubeMap = new CubeTexture({
 })
 cubeMap.init(renderer.gl)
 
-const irradianceMap = createIrradianceMap(renderer.gl, cubeMap, cubeMap.size)
+const irradianceMap = createIrradianceMap(renderer.gl, cubeMap, 32)
 sphereMat1.envMap = cubeMap
 sphereMat1.irradianceMap = irradianceMap.handle
 
@@ -197,7 +198,12 @@ const scene = [directionalLight, ambientLight, sphere1]
 const effectComposer = new EffectComposer(renderer)
 const renderPass = new RenderPass(scene, camera)
 effectComposer.addPass(renderPass)
+const cubeMapPass = new CubeMapPass()
+effectComposer.addPass(cubeMapPass)
 
+gui.add(obj, 'faceIndex', [0, 1, 2, 3, 4, 5, 6]).onChange(val => {
+  cubeMapPass.material.uniforms.uFaceIndex = val
+})
 
 const outputPass = new OutputPass()
 effectComposer.addPass(outputPass)

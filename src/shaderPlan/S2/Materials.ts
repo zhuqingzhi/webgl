@@ -591,7 +591,8 @@ export class MeshStandardMaterial extends Material {
         uniform samplerCube uEnvMap;
         uniform bool uHasEnvMap;
         uniform samplerCube uIrradianceMap;
-
+        uniform bool uHasIrradianceMap;
+        
         // ---- BRDF 三项 ----
         float distributionGGX(vec3 N, vec3 H, float roughness) {
             float a  = roughness * roughness;
@@ -741,24 +742,26 @@ export class MeshStandardMaterial extends Material {
 
             vec3 ambient=vec3(0);
             vec3 diffuseEnv=vec3(0);
+
+            if (uHasIrradianceMap) {
+                vec3 irradiance = texture(uIrradianceMap, N).rgb;
+                diffuseEnv = kD_amb * albedo * irradiance;
+            } else {
+                diffuseEnv = kD_amb * albedo * uAmbientColor;
+            }
+            ambient += diffuseEnv;
             if(uHasEnvMap){
                 vec3 R=reflect(-V,N);
-                // 漫反射:用N方向采样
-                vec3 irradiance =texture(uIrradianceMap,N).rgb;
                 // 镜面：用R方向采样
                 vec3 prefiltered=texture(uEnvMap,R).rgb;
                 vec3 specularEnv=prefiltered*(F0*0.9+0.1);
-                diffuseEnv = kD_amb * albedo * irradiance;  
-                ambient=diffuseEnv+specularEnv;
-                // ambient=diffuseEnv+specularEnv;
+                ambient+=specularEnv;
             }else{
-                 // 漫反射环境：常量 irradiance 近似
-                diffuseEnv = kD_amb * albedo * uAmbientColor;
 
                 // 镜面环境：常量色 + 粗糙度衰减（D3 换成预过滤 cubemap）
                 vec3 specularEnv = F_amb * uAmbientColor * (1.0 - roughness * 0.7);
 
-                ambient = diffuseEnv + specularEnv;
+                ambient += specularEnv;
             }
             fragColor = vec4(ambient + Lo, 1.0);
         }
@@ -791,7 +794,8 @@ export class MeshStandardMaterial extends Material {
         this.uniforms['uNormalScale'] = this.normalScale
         const PROC_MAP = { none: 0, checker: 1, wood: 2, marble: 3, cloud: 4 }
         this.uniforms.uProcedural = PROC_MAP[this.procedural ?? 'none']
-        this.uniforms.uHasEnvMap = !!(this.envMap && this.irradianceMap)
+        this.uniforms.uHasEnvMap = !!(this.envMap)
+        this.uniforms.uHasIrradianceMap = !!(this.irradianceMap)
     }
 }
 
